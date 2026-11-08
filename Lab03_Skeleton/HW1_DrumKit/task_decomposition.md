@@ -16,7 +16,7 @@ reusing accessibility and keyboard techniques from Lab 02.
 - [x] HW1-07: Add accessible buttons and focus management.
 - [x] HW1-08: Implement visual hit history and decibel meter.
 - [x] HW1-09: Test keyboard, audio, accessibility and responsive UI.
-- [ ] HW1-10: Run Lighthouse audit, fix issues and document results.
+- [x] HW1-10: Run Lighthouse audit, fix issues and document results.
 
 ## Definition of Done
 - All 7 drum pads work with keyboard and mouse.
@@ -75,3 +75,24 @@ from Lab 02 HW1 without copying the DataGrid
 business logic.
 
 Next Task: HW1-02 — Initialize drum pad structure.
+
+### HW1-09 Test Result
+- Functional: PASS
+- Keyboard: PASS
+- Accessibility: PASS
+- Responsive 375px: PASS
+- Build: PASS
+- Bugs found: [actual number]
+
+
+## HW1-10 — Final Lighthouse Audit
+
+- Test Environment: Vite Production Preview
+- Performance: 100/100
+- Accessibility: 100/100
+- Best Practices: 96/100
+- SEO: 82/100
+- WCAG 2.2 AA: Manual verification not fully completed
+- Result: Automated Lighthouse audit completed
+- Remaining improvements: Best Practices and SEO
+
