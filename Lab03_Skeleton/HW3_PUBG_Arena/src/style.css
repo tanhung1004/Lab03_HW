@@ -1,0 +1,23 @@
+:root {
+  font-family: Inter, system-ui, Arial, sans-serif;
+  color: #e8edf5;
+  background: #0b1020;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+
+.starter-page {
+  width: min(900px, calc(100% - 40px));
+  margin: 12vh auto;
+  padding: 32px;
+  border: 1px solid #334155;
+  border-radius: 18px;
+  background: #151d2e;
+}
+
+.eyebrow { color: #38bdf8; font-weight: 700; letter-spacing: .08em; }
+.todo { color: #fbbf24; }
