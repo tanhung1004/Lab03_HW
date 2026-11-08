@@ -1,7 +1,7 @@
 
 import { mockCrates } from "./data/mockCrates";
 import { mockSquads } from "./data/mockSquads";
-import { usePubgAirdropTimer } from "./hooks/useAirdropTimer";
+import { useAirdropTimer } from "./hooks/useAirdropTimer";
 import "./style.css";
 
 // Format Vietnamese currency.
@@ -9,7 +9,7 @@ const formatVnd = (amount: number): string => {
   return `${new Intl.NumberFormat("vi-VN").format(amount)} đ`;
 };
 
-// Display countdown for an individual crate.
+// Countdown component for each crate.
 interface CrateCountdownProps {
   targetEpochMs: number;
 }
@@ -18,7 +18,7 @@ function CrateCountdown({
   targetEpochMs,
 }: CrateCountdownProps) {
   const { remainingMs, isLive } =
-    usePubgAirdropTimer(targetEpochMs);
+    useAirdropTimer(targetEpochMs);
 
   const totalSeconds = Math.ceil(remainingMs / 1000);
 
@@ -31,7 +31,15 @@ function CrateCountdown({
     .join(":");
 
   return (
-    <strong className="crate-countdown">
+    <strong
+      className="crate-countdown"
+      role="timer"
+      aria-label={
+        isLive
+          ? "Drop time reached"
+          : `Time remaining: ${hours} hours, ${minutes} minutes, ${seconds} seconds`
+      }
+    >
       {isLive ? "DROP TIME REACHED" : timeText}
     </strong>
   );
@@ -99,7 +107,7 @@ export default function App() {
         </div>
       </section>
 
-      {/* Airdrop and Ticket Cards */}
+      {/* Airdrop & Ticket Cards */}
       <section
         className="arena-section"
         aria-labelledby="drops-title"
@@ -146,7 +154,10 @@ export default function App() {
               <div className="crate-details">
                 <p>
                   <span>Remaining Stock</span>
-                  <strong>{crate.remainingStock}</strong>
+
+                  <strong>
+                    {crate.remainingStock}
+                  </strong>
                 </p>
 
                 <p>
@@ -170,7 +181,7 @@ export default function App() {
         </div>
       </section>
 
-      {/* PUBG Vietnam Leaderboard */}
+      {/* Vietnam Leaderboard */}
       <section
         className="arena-section"
         aria-labelledby="leaderboard-title"
@@ -219,9 +230,17 @@ export default function App() {
                         {squad.squadName}
                       </th>
 
-                      <td>{squad.wwcdCount}</td>
-                      <td>{squad.placementPts}</td>
-                      <td>{squad.killPts}</td>
+                      <td>
+                        {squad.wwcdCount}
+                      </td>
+
+                      <td>
+                        {squad.placementPts}
+                      </td>
+
+                      <td>
+                        {squad.killPts}
+                      </td>
 
                       <td className="total-points">
                         {total}
