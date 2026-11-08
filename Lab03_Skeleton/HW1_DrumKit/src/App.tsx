@@ -1,21 +1,45 @@
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import DrumPad from "./components/DrumPad";
 import { drumPads } from "./data/drumPads";
 import { useDrumKeyboard } from "./hooks/useDrumKeyboard";
+import { DrumAudioEngine } from "./audio/DrumAudioEngine";
 
-// Map: KeyW -> kick, KeyA -> snare, ...
+// Map physical keyboard codes to drum pad IDs.
 const padMap = new Map(
   drumPads.map((pad) => [pad.keyCode, pad.id])
 );
 
 export default function App() {
+  // Track currently pressed drum pads.
   const [pressedPads, setPressedPads] = useState<Set<string>>(
     () => new Set()
   );
 
+  // Keep one audio engine instance.
+  const audioEngine = useRef<DrumAudioEngine | null>(null);
+
+  // Clean up audio resources when the component unmounts.
+  useEffect(() => {
+    return () => {
+      audioEngine.current?.dispose();
+      audioEngine.current = null;
+    };
+  }, []);
+
+  // Handle pressing and releasing drum pads.
   const handlePadChange = useCallback(
     (padId: string, isPressed: boolean) => {
+      // Play a sound when a pad is pressed.
+      if (isPressed) {
+        if (!audioEngine.current) {
+          audioEngine.current = new DrumAudioEngine();
+        }
+
+        audioEngine.current.play(padId);
+      }
+
+      // Update the visual state.
       setPressedPads((previous) => {
         if (previous.has(padId) === isPressed) {
           return previous;
@@ -35,6 +59,7 @@ export default function App() {
     []
   );
 
+  // Enable keyboard controls.
   useDrumKeyboard(padMap, handlePadChange);
 
   return (
@@ -62,19 +87,19 @@ export default function App() {
       <p className="drum-note">
         Press W A S D J K L to activate the pads.
       </p>
-      
-<div className="test-input">
-  <label htmlFor="practice-note">
-    Practice Note (Keyboard Focus Test)
-  </label>
 
-  <input
-    id="practice-note"
-    type="text"
-    placeholder="Type W A S D J K L here..."
-  />
-</div>
+      {/* Keyboard focus isolation test */}
+      <div className="test-input">
+        <label htmlFor="practice-note">
+          Practice Note (Keyboard Focus Test)
+        </label>
 
+        <input
+          id="practice-note"
+          type="text"
+          placeholder="Type W A S D J K L here..."
+        />
+      </div>
     </main>
   );
 }
