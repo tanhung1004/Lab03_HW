@@ -1,23 +1,140 @@
+
+/* HW2-04: Responsive Piano Keyboard */
+
 :root {
   font-family: Inter, system-ui, Arial, sans-serif;
-  color: #e8edf5;
+  color: #f8fafc;
   background: #0b1020;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
 }
 
-* { box-sizing: border-box; }
-
-body { margin: 0; min-width: 320px; min-height: 100vh; }
-
-.starter-page {
-  width: min(900px, calc(100% - 40px));
-  margin: 12vh auto;
-  padding: 32px;
-  border: 1px solid #334155;
-  border-radius: 18px;
-  background: #151d2e;
+* {
+  box-sizing: border-box;
 }
 
-.eyebrow { color: #38bdf8; font-weight: 700; letter-spacing: .08em; }
-.todo { color: #fbbf24; }
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+.piano-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 24px;
+}
+
+.piano-header {
+  margin-bottom: 36px;
+}
+
+.piano-eyebrow {
+  color: #34d399;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.piano-header h1 {
+  font-size: clamp(30px, 5vw, 48px);
+  margin: 12px 0;
+}
+
+.piano-header p,
+.piano-note {
+  color: #94a3b8;
+}
+
+.piano-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 20px 0;
+  color: #cbd5e1;
+}
+
+/* Horizontal scrolling area */
+.piano-viewport {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  border-radius: 12px;
+}
+
+.piano-viewport:focus-visible {
+  outline: 3px solid #34d399;
+  outline-offset: 3px;
+}
+
+/* 88-key keyboard */
+.piano-keyboard {
+  position: relative;
+  height: 200px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Shared key structure */
+.piano-key {
+  position: absolute;
+  top: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  border-radius: 0 0 6px 6px;
+}
+
+/* White keys */
+.piano-key--white {
+  width: 44px;
+  height: 198px;
+  background: linear-gradient(#fff, #e2e8f0);
+  border: 1px solid #94a3b8;
+  color: #334155;
+  z-index: 1;
+}
+
+/* Black keys */
+.piano-key--black {
+  width: 28px;
+  height: 125px;
+  background: linear-gradient(#334155, #020617);
+  border: 1px solid #020617;
+  box-shadow: 2px 3px 5px #0005;
+  z-index: 2;
+}
+
+.piano-key-label {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.piano-note {
+  margin-top: 24px;
+}
+
+@media (max-width: 600px) {
+  .piano-page {
+    padding: 24px 16px;
+  }
+
+  .piano-header {
+    margin-bottom: 24px;
+  }
+
+  .piano-stats {
+    gap: 12px;
+    font-size: 13px;
+  }
+}
