@@ -153,3 +153,29 @@ body {
     transition: none;
   }
 }
+
+
+/* HW1-05: Keyboard focus isolation test */
+
+.test-input {
+  margin: 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.test-input input {
+  width: 100%;
+  max-width: 400px;
+  padding: 12px 14px;
+  border: 1px solid #64748b;
+  border-radius: 8px;
+  background: #1e293b;
+  color: #ffffff;
+  font: inherit;
+}
+
+.test-input input:focus-visible {
+  outline: 3px solid #34d399;
+  outline-offset: 2px;
+}

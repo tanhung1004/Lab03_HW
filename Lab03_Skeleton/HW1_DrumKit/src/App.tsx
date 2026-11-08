@@ -62,6 +62,19 @@ export default function App() {
       <p className="drum-note">
         Press W A S D J K L to activate the pads.
       </p>
+      
+<div className="test-input">
+  <label htmlFor="practice-note">
+    Practice Note (Keyboard Focus Test)
+  </label>
+
+  <input
+    id="practice-note"
+    type="text"
+    placeholder="Type W A S D J K L here..."
+  />
+</div>
+
     </main>
   );
 }
