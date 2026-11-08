@@ -213,3 +213,24 @@ body {
   margin-top: 16px;
   color: #86efac;
 }
+
+
+/* HW2-08: Piano key active state */
+
+.piano-key--white .piano-key-button.is-active {
+  background: #bbf7d0;
+}
+
+.piano-key--black .piano-key-button.is-active {
+  background: #065f46;
+}
+
+.piano-key-button {
+  transition: background-color 0.08s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .piano-key-button {
+    transition: none;
+  }
+}

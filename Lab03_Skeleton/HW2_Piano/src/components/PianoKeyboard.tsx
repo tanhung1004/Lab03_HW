@@ -1,4 +1,5 @@
 
+import { useCallback, useState } from "react";
 import PianoKey from "./PianoKey";
 import { pianoKeys } from "../data/pianoKeys";
 
@@ -15,8 +16,9 @@ const positionedKeys = pianoKeys.map((note) => {
   if (note.isBlack) {
     return {
       note,
-      left: whiteKeyCount * WHITE_KEY_WIDTH
-        - BLACK_KEY_WIDTH / 2,
+      left:
+        whiteKeyCount * WHITE_KEY_WIDTH -
+        BLACK_KEY_WIDTH / 2,
     };
   }
 
@@ -29,6 +31,32 @@ const positionedKeys = pianoKeys.map((note) => {
 export default function PianoKeyboard({
   onPlayNote,
 }: PianoKeyboardProps) {
+  const [activeKeys, setActiveKeys] = useState<Set<number>>(
+    () => new Set()
+  );
+
+  // Stable callback so memoized keys can skip renders.
+  const handlePressChange = useCallback(
+    (midi: number, pressed: boolean) => {
+      setActiveKeys((previous) => {
+        if (previous.has(midi) === pressed) {
+          return previous;
+        }
+
+        const next = new Set(previous);
+
+        if (pressed) {
+          next.add(midi);
+        } else {
+          next.delete(midi);
+        }
+
+        return next;
+      });
+    },
+    []
+  );
+
   return (
     <div
       className="piano-viewport"
@@ -45,7 +73,9 @@ export default function PianoKeyboard({
             key={note.midi}
             note={note}
             left={left}
+            isActive={activeKeys.has(note.midi)}
             onPlayNote={onPlayNote}
+            onPressChange={handlePressChange}
           />
         ))}
       </ol>
