@@ -19,3 +19,52 @@ Record bugs that we can reproduce. Do not invent bugs or claim a fix without ret
 - **Fix:**
 - **Regression test:**
 - **Evidence:** screenshot, terminal output, or test result
+
+## BUG-001 — [Tên lỗi]
+- Task: HW1-05
+- Source: ChatGPT-generated code
+- Expected Behavior:
+- Actual Behavior:
+- Steps to Reproduce:
+- Root Cause:
+- Fix:
+- Retest Result:
+- Git Commit:
+
+
+## BUG-001 — [Bug title]
+
+- Task: HW1-09
+- Source: ChatGPT-generated code
+- Status: Open
+
+### Expected Behavior
+[What should happen?]
+
+### Actual Behavior
+[What actually happened?]
+
+### Steps to Reproduce
+1.
+2.
+3.
+
+### Root Cause
+[To be investigated]
+
+### Fix
+[To be implemented]
+
+### Retest
+[Pending]
+
+### Git Commit
+[To be added after fixing]
+
+### HW1-09 Test Result
+- Functional: PASS
+- Keyboard: PASS
+- Accessibility: PASS
+- Responsive 375px: PASS
+- Build: PASS
+- Bugs found: [actual number]
