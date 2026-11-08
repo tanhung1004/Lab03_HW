@@ -1,63 +1,44 @@
 
-import { useCallback, useRef, useState } from "react";
-
+import { useRef, useState } from "react";
 import { mockCrates } from "./data/mockCrates";
 import { mockSquads } from "./data/mockSquads";
-
 import { useAirdropTimer } from "./hooks/useAirdropTimer";
-
 import {
-  DROP_LIVE_DURATION_MS,
   getDropPhase,
   getPhaseLabel,
+  DROP_LIVE_DURATION_MS,
 } from "./services/dropPhase";
-
 import {
-  MockHttpError,
   requestClaim,
+  MockHttpError,
 } from "./services/claimService";
-
+import { runConcurrencyTests } from "./services/concurrencyTest";
+import type {
+  ConcurrencyTestResult,
+} from "./services/concurrencyTest";
 import type {
   DropPhase,
   PubgCrateDrop,
 } from "./types/arena";
-
 import "./style.css";
 
 /**
- * HW3-08 — Optimistic Claim & Conflict Rollback
+ * HW3-09 — PUBG Vietnam Arena
  *
- * - Update inventory immediately on Claim.
- * - Simulate successful/failed API requests.
- * - Handle mock HTTP 409 Conflict.
- * - Roll back optimistic inventory.
- * - Prevent duplicate in-flight requests.
+ * Includes:
+ * - Zero-drift Airdrop countdown
+ * - Drop phase state machine
+ * - Optimistic inventory updates
+ * - Simulated HTTP 409 rollback
+ * - Duplicate request protection
+ * - Concurrency / oversell tests
+ * - PUBG squad leaderboard
  */
 
-type ClaimFeedback = {
+type Feedback = {
   message: string;
-  tone: "success" | "error" | "info";
+  tone: "info" | "success" | "error";
 };
-
-function formatVnd(amount: number): string {
-  return `${new Intl.NumberFormat("vi-VN").format(amount)} đ`;
-}
-
-function formatCountdown(milliseconds: number): string {
-  const totalSeconds = Math.ceil(
-    Math.max(0, milliseconds) / 1000
-  );
-
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor(
-    (totalSeconds % 3600) / 60
-  );
-  const seconds = totalSeconds % 60;
-
-  return [hours, minutes, seconds]
-    .map((value) => String(value).padStart(2, "0"))
-    .join(":");
-}
 
 const phaseColors: Record<DropPhase, string> = {
   WARMUP: "#fbbf24",
@@ -66,81 +47,87 @@ const phaseColors: Record<DropPhase, string> = {
   EXPIRED: "#94a3b8",
 };
 
-interface CrateCardProps {
+function formatVnd(price: number): string {
+  return `${new Intl.NumberFormat("vi-VN").format(price)} đ`;
+}
+
+function formatCountdown(ms: number): string {
+  const total = Math.ceil(Math.max(0, ms) / 1000);
+
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+
+  return [hours, minutes, seconds]
+    .map((value) => String(value).padStart(2, "0"))
+    .join(":");
+}
+
+// -------------------------------
+// CRATE CARD
+// -------------------------------
+
+type CrateCardProps = {
   crate: PubgCrateDrop;
-  isPending: boolean;
-  simulateConflict: boolean;
-  feedback?: ClaimFeedback;
-  onClaim: (crateId: string) => void;
-  onToggleConflict: (
-    crateId: string,
+  pending: boolean;
+  forceConflict: boolean;
+  feedback?: Feedback;
+  onClaim: (id: string) => void;
+  onConflictChange: (
+    id: string,
     enabled: boolean
   ) => void;
-}
+};
 
 function CrateCard({
   crate,
-  isPending,
-  simulateConflict,
+  pending,
+  forceConflict,
   feedback,
   onClaim,
-  onToggleConflict,
+  onConflictChange,
 }: CrateCardProps) {
-  const { remainingMs, nowMs } =
+  const { nowMs, remainingMs } =
     useAirdropTimer(crate.dropEpochMs);
 
   const phase = getDropPhase(crate, nowMs);
   const phaseLabel = getPhaseLabel(phase);
 
-  const closesAt =
-    crate.dropEpochMs + DROP_LIVE_DURATION_MS;
-
-  const liveRemainingMs = Math.max(
+  const liveRemaining = Math.max(
     0,
-    closesAt - nowMs
+    crate.dropEpochMs +
+      DROP_LIVE_DURATION_MS -
+      nowMs
   );
 
-  let timerTitle = "Drop Status";
-  let timerText = "";
-  let claimText = "Claim — Unavailable";
+  const timerTitle =
+    phase === "WARMUP"
+      ? "Drop Starts In"
+      : phase === "AIRDROP_LIVE"
+        ? "Drop Ends In"
+        : "Drop Status";
 
-  switch (phase) {
-    case "WARMUP":
-      timerTitle = "Drop Starts In";
-      timerText = formatCountdown(remainingMs);
-      claimText = "Claim — Opens Soon";
-      break;
-
-    case "AIRDROP_LIVE":
-      timerTitle = "Drop Ends In";
-      timerText = formatCountdown(liveRemainingMs);
-      claimText = "Claim Reward";
-      break;
-
-    case "LOOTED_OUT":
-      timerText = "All Rewards Claimed";
-      claimText = "Sold Out";
-      break;
-
-    case "EXPIRED":
-      timerText = "Event Window Closed";
-      claimText = "Drop Expired";
-      break;
-  }
-
-  if (isPending) {
-    claimText = "Processing Claim...";
-  }
+  const timerText =
+    phase === "WARMUP"
+      ? formatCountdown(remainingMs)
+      : phase === "AIRDROP_LIVE"
+        ? formatCountdown(liveRemaining)
+        : phase === "LOOTED_OUT"
+          ? "All Rewards Claimed"
+          : "Event Window Closed";
 
   const canClaim =
-    phase === "AIRDROP_LIVE" && !isPending;
+    phase === "AIRDROP_LIVE" && !pending;
 
-  const feedbackColor =
-    feedback?.tone === "error"
-      ? "#fda4af"
-      : feedback?.tone === "success"
-        ? "#86efac"
-        : "#93c5fd";
+  const claimLabel = pending
+    ? "Processing Claim..."
+    : phase === "AIRDROP_LIVE"
+      ? "Claim Reward"
+      : phase === "WARMUP"
+        ? "Claim — Opens Soon"
+        : phase === "LOOTED_OUT"
+          ? "Sold Out"
+          : "Drop Expired";
 
   return (
     <article className="crate-card">
@@ -174,19 +161,16 @@ function CrateCard({
 
         <p>
           <span>{timerTitle}</span>
-
           <strong
             className="crate-countdown"
             style={{ color: phaseColors[phase] }}
             role="timer"
-            aria-label={`${phaseLabel}: ${timerText}`}
           >
             {timerText}
           </strong>
         </p>
       </div>
 
-      {/* Claim button */}
       <button
         type="button"
         className="claim-button"
@@ -196,42 +180,40 @@ function CrateCard({
           backgroundColor: canClaim
             ? "#fbbf24"
             : "#475569",
-          color: canClaim ? "#0f172a" : "#e2e8f0",
-          cursor: canClaim ? "pointer" : "not-allowed",
+          color: canClaim
+            ? "#0f172a"
+            : "#e2e8f0",
+          cursor: canClaim
+            ? "pointer"
+            : "not-allowed",
           fontWeight: 700,
         }}
       >
-        {claimText}
+        {claimLabel}
       </button>
 
-      {/* Force a 409 response to test rollback */}
       <label
         style={{
           display: "flex",
           alignItems: "center",
           gap: 8,
           marginTop: 14,
-          fontSize: 13,
-          color: "#cbd5e1",
-          cursor: isPending ? "not-allowed" : "pointer",
         }}
       >
         <input
           type="checkbox"
-          checked={simulateConflict}
-          disabled={isPending}
+          checked={forceConflict}
+          disabled={pending}
           onChange={(event) =>
-            onToggleConflict(
+            onConflictChange(
               crate.id,
               event.target.checked
             )
           }
         />
-
         Simulate HTTP 409 (Demo)
       </label>
 
-      {/* Result message */}
       {feedback && (
         <p
           role={
@@ -240,10 +222,13 @@ function CrateCard({
               : "status"
           }
           style={{
-            color: feedbackColor,
-            fontSize: 13,
-            lineHeight: 1.5,
             marginTop: 12,
+            color:
+              feedback.tone === "error"
+                ? "#fda4af"
+                : feedback.tone === "success"
+                  ? "#86efac"
+                  : "#93c5fd",
           }}
         >
           {feedback.message}
@@ -253,133 +238,159 @@ function CrateCard({
   );
 }
 
+// -------------------------------
+// MAIN APP
+// -------------------------------
+
 export default function App() {
   // Local optimistic inventory.
-  const [crates, setCrates] = useState<PubgCrateDrop[]>(
-    () => mockCrates.map((crate) => ({ ...crate }))
-  );
+  const [crates, setCrates] = useState<
+    PubgCrateDrop[]
+  >(() => mockCrates.map((crate) => ({ ...crate })));
 
-  // Pending requests, one per crate.
-  const [pendingIds, setPendingIds] = useState<Set<string>>(
-    () => new Set()
-  );
+  const [pendingIds, setPendingIds] = useState<
+    Set<string>
+  >(() => new Set());
 
-  // Conflict testing switch, one per crate.
-  const [conflictIds, setConflictIds] = useState<Set<string>>(
-    () => new Set()
-  );
+  const [conflictIds, setConflictIds] = useState<
+    Set<string>
+  >(() => new Set());
 
-  // Claim status messages.
   const [feedbackById, setFeedbackById] = useState<
-    Record<string, ClaimFeedback>
+    Record<string, Feedback>
   >({});
 
-  // Synchronous in-flight locking.
-  const inFlightIds = useRef<Set<string>>(new Set());
-
-  // Enable or disable forced 409 for a crate.
-  const handleToggleConflict = useCallback(
-    (crateId: string, enabled: boolean) => {
-      setConflictIds((previous) => {
-        const next = new Set(previous);
-
-        if (enabled) {
-          next.add(crateId);
-        } else {
-          next.delete(crateId);
-        }
-
-        return next;
-      });
-    },
-    []
+  // Synchronous lock for duplicate clicks.
+  const inFlightIds = useRef<Set<string>>(
+    new Set()
   );
 
-  /**
-   * HW3-08: Optimistic claim with rollback.
-   */
-  const handleClaim = useCallback(
-    async (crateId: string) => {
-      // Block repeated clicks before React rerenders.
-      if (inFlightIds.current.has(crateId)) {
-        return;
-      }
+  // Concurrency test state.
+  const [testResults, setTestResults] = useState<
+    ConcurrencyTestResult[]
+  >([]);
 
-      const currentCrate = crates.find(
-        (crate) => crate.id === crateId
-      );
+  const [isTesting, setIsTesting] =
+    useState(false);
 
-      if (!currentCrate) return;
+  const [testError, setTestError] =
+    useState("");
 
-      // Validate current client time and stock.
-      const phase = getDropPhase(
-        currentCrate,
-        Date.now()
-      );
+  const testRunningRef = useRef(false);
 
-      if (
-        phase !== "AIRDROP_LIVE" ||
-        currentCrate.remainingStock <= 0
-      ) {
-        return;
-      }
+  // Toggle the simulated 409 conflict.
+  function handleConflictChange(
+    crateId: string,
+    enabled: boolean
+  ) {
+    setConflictIds((previous) => {
+      const next = new Set(previous);
 
-      const shouldSimulate409 =
-        conflictIds.has(crateId);
-
-      // Lock synchronously.
-      inFlightIds.current.add(crateId);
-
-      setPendingIds((previous) => {
-        const next = new Set(previous);
+      if (enabled) {
         next.add(crateId);
-        return next;
-      });
+      } else {
+        next.delete(crateId);
+      }
+
+      return next;
+    });
+  }
+
+  // -------------------------------
+  // OPTIMISTIC CLAIM + ROLLBACK
+  // -------------------------------
+
+  async function handleClaim(crateId: string) {
+    // Prevent repeated requests.
+    if (inFlightIds.current.has(crateId)) {
+      return;
+    }
+
+    const crate = crates.find(
+      (item) => item.id === crateId
+    );
+
+    if (!crate) return;
+
+    // Validate current stock and drop phase.
+    if (
+      getDropPhase(crate, Date.now()) !==
+      "AIRDROP_LIVE"
+    ) {
+      return;
+    }
+
+    // Lock synchronously.
+    inFlightIds.current.add(crateId);
+
+    setPendingIds((previous) =>
+      new Set(previous).add(crateId)
+    );
+
+    setFeedbackById((previous) => ({
+      ...previous,
+      [crateId]: {
+        message: "Sending claim request...",
+        tone: "info",
+      },
+    }));
+
+    // Optimistic update:
+    // Decrease the inventory immediately.
+    setCrates((previous) =>
+      previous.map((item) =>
+        item.id === crateId
+          ? {
+              ...item,
+              remainingStock: Math.max(
+                0,
+                item.remainingStock - 1
+              ),
+            }
+          : item
+      )
+    );
+
+    try {
+      // Simulated API call.
+      const response = await requestClaim(
+        crateId,
+        conflictIds.has(crateId)
+      );
+
+      // Success: synchronize server stock.
+      setCrates((previous) =>
+        previous.map((item) =>
+          item.id === crateId
+            ? {
+                ...item,
+                remainingStock:
+                  response.remainingStock,
+              }
+            : item
+        )
+      );
 
       setFeedbackById((previous) => ({
         ...previous,
         [crateId]: {
-          message: "Sending claim request...",
-          tone: "info",
+          message:
+            "Claim confirmed! Inventory updated.",
+          tone: "success",
         },
       }));
-
-      /**
-       * Optimistic update:
-       * inventory decreases before server response.
-       */
-      setCrates((previous) =>
-        previous.map((crate) =>
-          crate.id === crateId
-            ? {
-                ...crate,
-                remainingStock:
-                  Math.max(0, crate.remainingStock - 1),
-              }
-            : crate
-        )
-      );
-
-      try {
-        // Simulated server request.
-        const result = await requestClaim(
-          crateId,
-          shouldSimulate409
-        );
-
-        /**
-         * Success:
-         * synchronize local inventory with
-         * the mock server's authoritative stock.
-         */
+    } catch (error: unknown) {
+      if (error instanceof MockHttpError) {
+        // HTTP 409: rollback to server stock.
         setCrates((previous) =>
-          previous.map((crate) =>
-            crate.id === crateId
+          previous.map((item) =>
+            item.id === crateId
               ? {
-                  ...crate,
-                  remainingStock: result.remainingStock,
+                  ...item,
+                  remainingStock:
+                    error.remainingStock,
                 }
-              : crate
+              : item
           )
         );
 
@@ -387,89 +398,94 @@ export default function App() {
           ...previous,
           [crateId]: {
             message:
-              "Claim confirmed! Inventory updated.",
-            tone: "success",
+              `HTTP ${error.status} Conflict — ` +
+              "inventory synchronized.",
+            tone: "error",
           },
         }));
-      } catch (error) {
-        if (error instanceof MockHttpError) {
-          /**
-           * HTTP 409 rollback:
-           * restore authoritative server inventory.
-           *
-           * If stock really sold out, server stock may
-           * be 0 rather than the old optimistic value.
-           */
-          setCrates((previous) =>
-            previous.map((crate) =>
-              crate.id === crateId
-                ? {
-                    ...crate,
-                    remainingStock:
-                      error.remainingStock,
-                  }
-                : crate
-            )
-          );
 
-          setFeedbackById((previous) => ({
-            ...previous,
-            [crateId]: {
-              message:
-                `HTTP ${error.status} Conflict — ` +
-                `claim rejected. Inventory synchronized.`,
-              tone: "error",
-            },
-          }));
+        console.warn(
+          "Mock claim conflict:",
+          error.message
+        );
+      } else {
+        // Unexpected error: undo one decrement.
+        setCrates((previous) =>
+          previous.map((item) =>
+            item.id === crateId
+              ? {
+                  ...item,
+                  remainingStock:
+                    item.remainingStock + 1,
+                }
+              : item
+          )
+        );
 
-          console.warn(
-            "Mock claim conflict:",
-            error.message
-          );
-        } else {
-          /**
-           * Unexpected failure:
-           * revert this request's optimistic decrement.
-           */
-          setCrates((previous) =>
-            previous.map((crate) =>
-              crate.id === crateId
-                ? {
-                    ...crate,
-                    remainingStock:
-                      crate.remainingStock + 1,
-                  }
-                : crate
-            )
-          );
+        setFeedbackById((previous) => ({
+          ...previous,
+          [crateId]: {
+            message:
+              "Claim failed. Stock reverted.",
+            tone: "error",
+          },
+        }));
 
-          setFeedbackById((previous) => ({
-            ...previous,
-            [crateId]: {
-              message:
-                "Claim failed. Optimistic stock reverted.",
-              tone: "error",
-            },
-          }));
-
-          console.error(
-            "Unexpected claim error:",
-            error
-          );
-        }
-      } finally {
-        // Always release the request lock.
-        inFlightIds.current.delete(crateId);
-
-        setPendingIds((previous) => {
-          const next = new Set(previous);
-          next.delete(crateId);
-          return next;
-        });
+        console.error("Claim failed:", error);
       }
-    },
-    [crates, conflictIds]
-  );
+    } finally {
+      // Release the in-flight request lock.
+      inFlightIds.current.delete(crateId);
+
+      setPendingIds((previous) => {
+        const next = new Set(previous);
+        next.delete(crateId);
+        return next;
+      });
+    }
+  }
+
+  // -------------------------------
+  // CONCURRENCY TESTS
+  // -------------------------------
+
+  async function handleRunTests() {
+    if (testRunningRef.current) return;
+
+    testRunningRef.current = true;
+
+    setIsTesting(true);
+    setTestResults([]);
+    setTestError("");
+
+    try {
+      const results =
+        await runConcurrencyTests();
+
+      setTestResults(results);
+      console.table(results);
+    } catch (error: unknown) {
+      console.error(
+        "Concurrency tests failed:",
+        error
+      );
+
+      setTestError(
+        "Unable to complete concurrency tests."
+      );
+    } finally {
+      testRunningRef.current = false;
+      setIsTesting(false);
+    }
+  }
+
+  const allTestsPassed =
+    testResults.length === 4 &&
+    testResults.every((result) => result.passed);
+
+  // -------------------------------
+  // RENDER
+  // -------------------------------
 
   return (
     <main className="arena">
@@ -504,8 +520,8 @@ export default function App() {
           </span>
 
           <h2 id="hero-title">
-            Vietnam Championship
-            <span> Airdrop Arena</span>
+            Vietnam Championship{" "}
+            <span>Airdrop Arena</span>
           </h2>
 
           <p>
@@ -532,7 +548,7 @@ export default function App() {
         </div>
       </section>
 
-      {/* Airdrop Cards */}
+      {/* Crates */}
       <section
         className="arena-section"
         aria-labelledby="drops-title"
@@ -556,23 +572,161 @@ export default function App() {
             <CrateCard
               key={crate.id}
               crate={crate}
-              isPending={pendingIds.has(crate.id)}
-              simulateConflict={
-                conflictIds.has(crate.id)
-              }
+              pending={pendingIds.has(crate.id)}
+              forceConflict={conflictIds.has(
+                crate.id
+              )}
               feedback={feedbackById[crate.id]}
               onClaim={(id) => {
                 void handleClaim(id);
               }}
-              onToggleConflict={
-                handleToggleConflict
+              onConflictChange={
+                handleConflictChange
               }
             />
           ))}
         </div>
       </section>
 
-      {/* Vietnam Squad Leaderboard */}
+      {/* Concurrency Test Lab */}
+      <section
+        className="arena-section"
+        aria-labelledby="concurrency-title"
+      >
+        <div className="section-heading">
+          <div>
+            <span className="section-tag">
+              CONCURRENCY TESTING
+            </span>
+
+            <h2 id="concurrency-title">
+              Oversell Prevention Lab
+            </h2>
+          </div>
+
+          <p>Isolated mock server tests</p>
+        </div>
+
+        <div className="leaderboard-panel">
+          <p>
+            Run simultaneous claims with limited
+            stock and check for overselling.
+          </p>
+
+          <button
+            type="button"
+            disabled={isTesting}
+            onClick={() => {
+              void handleRunTests();
+            }}
+            style={{
+              padding: "12px 20px",
+              border: 0,
+              borderRadius: 9,
+              background: "#fbbf24",
+              color: "#0f172a",
+              fontWeight: 800,
+              cursor: isTesting
+                ? "wait"
+                : "pointer",
+            }}
+          >
+            {isTesting
+              ? "Running Tests..."
+              : "Run Concurrency Tests"}
+          </button>
+
+          <div role="status" aria-live="polite">
+            {isTesting && (
+              <p>Testing concurrent claims...</p>
+            )}
+
+            {testError && (
+              <p style={{ color: "#fda4af" }}>
+                {testError}
+              </p>
+            )}
+
+            {testResults.length > 0 && (
+              <p
+                style={{
+                  color: allTestsPassed
+                    ? "#86efac"
+                    : "#fda4af",
+                  fontWeight: 700,
+                }}
+              >
+                {allTestsPassed
+                  ? "PASS — All 4 concurrency tests passed."
+                  : "FAIL — Review test results."}
+              </p>
+            )}
+          </div>
+
+          {testResults.length > 0 && (
+            <div
+              className="leaderboard-scroll"
+              role="region"
+              aria-label="Concurrency test results"
+              tabIndex={0}
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Scenario</th>
+                    <th scope="col">Stock</th>
+                    <th scope="col">Requests</th>
+                    <th scope="col">Success</th>
+                    <th scope="col">409</th>
+                    <th scope="col">Final</th>
+                    <th scope="col">Result</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {testResults.map((result) => (
+                    <tr key={result.name}>
+                      <th scope="row">
+                        {result.name}
+                      </th>
+
+                      <td>{result.initialStock}</td>
+                      <td>{result.requests}</td>
+                      <td>{result.successes}</td>
+                      <td>{result.conflicts}</td>
+                      <td>{result.finalStock}</td>
+
+                      <td
+                        style={{
+                          color: result.passed
+                            ? "#86efac"
+                            : "#fda4af",
+                        }}
+                      >
+                        {result.passed
+                          ? "PASS"
+                          : "FAIL"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <p
+            style={{
+              color: "#94a3b8",
+              fontSize: 13,
+            }}
+          >
+            Demo limitation: one JavaScript
+            runtime, not a real multi-server test.
+          </p>
+        </div>
+      </section>
+
+      {/* Leaderboard */}
       <section
         className="arena-section"
         aria-labelledby="leaderboard-title"
@@ -610,34 +764,28 @@ export default function App() {
               </thead>
 
               <tbody>
-                {mockSquads.map((squad) => {
-                  const total =
-                    squad.placementPts +
-                    squad.killPts;
+                {mockSquads.map((squad) => (
+                  <tr key={squad.squadId}>
+                    <th scope="row">
+                      {squad.squadName}
+                    </th>
 
-                  return (
-                    <tr key={squad.squadId}>
-                      <th scope="row">
-                        {squad.squadName}
-                      </th>
+                    <td>{squad.wwcdCount}</td>
+                    <td>{squad.placementPts}</td>
+                    <td>{squad.killPts}</td>
 
-                      <td>{squad.wwcdCount}</td>
-                      <td>{squad.placementPts}</td>
-                      <td>{squad.killPts}</td>
-
-                      <td className="total-points">
-                        {total}
-                      </td>
-                    </tr>
-                  );
-                })}
+                    <td className="total-points">
+                      {squad.placementPts +
+                        squad.killPts}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
       <footer className="arena-footer">
         Lab 03 — PUBG Vietnam Arena
 

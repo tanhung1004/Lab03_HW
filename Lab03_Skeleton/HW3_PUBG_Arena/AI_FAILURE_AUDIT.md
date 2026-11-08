@@ -30,3 +30,27 @@ This is a blank evidence log. Do not fill it with invented bugs. Add an entry on
 - **Root cause:**
 - **Fix applied:**
 - **Regression test / evidence:**
+
+
+## AI Failure — Incorrect TSX Syntax in HW3-09
+
+### AI-generated task
+Implement optimistic Claim, HTTP 409 rollback,
+and concurrency testing in App.tsx.
+
+### Observed failure
+VS Code reported a syntax error near line 457
+inside the handleClaim callback.
+
+### Impact
+The frontend could not pass TypeScript compilation.
+
+### Fix
+Rewrote the handleClaim function with clearer
+try/catch/finally blocks and corrected JSX structure.
+
+### Verification
+Run `npm run build` and confirm the error is resolved.
+
+### Status
+Pending verification.

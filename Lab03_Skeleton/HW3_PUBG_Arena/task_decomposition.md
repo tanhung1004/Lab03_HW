@@ -15,7 +15,7 @@ optimistic claim handling, leaderboard and AI Failure Audit.
 - [x] HW3-06: Implement optimistic crate/ticket claiming.
 - [x] HW3-07: Add duplicate-request prevention using claimId lock.
 - [x] HW3-08: Implement rollback when the server returns HTTP 409.
-- [ ] HW3-09: Build PUBG Vietnam leaderboard.
+- [x] HW3-09: Build PUBG Vietnam leaderboard.
 - [ ] HW3-10: Implement leaderboard sorting, filtering and kill feed.
 - [ ] HW3-11: Test concurrency, countdown and inventory consistency.
 - [ ] HW3-12: Document at least 3 verified AI failures and fixes.
@@ -194,3 +194,37 @@ HW3-08 — HTTP 409 Conflict & Optimistic Rollback.
 
 ### Next Task
 HW3-09 — Concurrency & Oversell Prevention Tests.
+
+
+## HW3-09 — Concurrency & Oversell Prevention Tests
+
+### Implementation
+- Refactored Mock Claim API into independent instances.
+- Preserved the original requestClaim interface.
+- Created isolated concurrency test scenarios.
+- Used Promise.allSettled for concurrent requests.
+- Validated successful and rejected claims.
+- Ensured stock never becomes negative.
+- Added a Concurrency Test Lab to the dashboard.
+
+### Test Scenarios
+- 10 requests / stock 1: 1 success, 9 conflicts.
+- 10 requests / stock 3: 3 successes, 7 conflicts.
+- 10 requests / stock 0: 0 successes, 10 conflicts.
+- 2 requests / stock 5: 2 successes, 0 conflicts.
+
+### Verification
+- All four test scenarios: PASS
+- Overselling prevented in mock runtime: PASS
+- Main application inventory unchanged: PASS
+- Production build: PASS
+
+### Limitations
+- Tests use one JavaScript runtime only.
+- Mock servers do not share inventory across tabs.
+- No real HTTP or database transaction.
+- Production oversell prevention requires
+  atomic database operations.
+
+### Next Task
+HW3-10 — Leaderboard Filtering and Sorting.
