@@ -173,3 +173,43 @@ body {
 .piano-key-label {
   margin-bottom: 12px;
 }
+
+
+/* HW2-06: FIFO polyphony testing */
+
+.fifo-test {
+  margin-top: 32px;
+  padding: 24px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+}
+
+.fifo-test h2 {
+  margin-top: 0;
+}
+
+.fifo-test p {
+  color: #cbd5e1;
+}
+
+.fifo-test button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #34d399;
+  color: #052e16;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fifo-test button:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 3px;
+}
+
+.fifo-test output {
+  display: block;
+  margin-top: 16px;
+  color: #86efac;
+}

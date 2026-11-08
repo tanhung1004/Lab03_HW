@@ -12,7 +12,7 @@ React.memo optimization and asynchronous melody playback.
 - [x] HW2-03: Generate 88 piano keys algorithmically (A0–C8).
 - [x] HW2-04: Build responsive piano keyboard UI.
 - [x] HW2-05: Implement the Web Audio PolyphonicSynth.
-- [ ] HW2-06: Implement 8-voice polyphony and FIFO voice stealing.
+- [x] HW2-06: Implement 8-voice polyphony and FIFO voice stealing.
 - [ ] HW2-07: Add ADSR-style gain ramp and audio cleanup.
 - [ ] HW2-08: Optimize PianoKey using React.memo.
 - [ ] HW2-09: Implement note recording and FIFO sequence storage.
@@ -123,3 +123,10 @@ HW2-03 — Generate and display 88 piano keys.
 
 ### Next Task
 HW2-04 — Build Responsive Piano Keyboard UI.
+
+### HW2-06 — Test Results
+- Maximum simultaneous voices: 8
+- FIFO data structure: ES6 Map
+- Ninth note steals oldest voice: PASS
+- Voice cleanup: PASS
+- TypeScript/Vite build: PASS

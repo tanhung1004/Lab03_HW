@@ -2,19 +2,23 @@
 interface PianoVoice {
   oscillator: OscillatorNode;
   gain: GainNode;
+  frequencyHz: number;
 }
 
 export class PolyphonicSynth {
   private ctx: AudioContext | null = null;
-  private activeVoice: PianoVoice | null = null;
 
-  // HW2-05: Play one note at a time.
+  // Map preserves insertion order for FIFO.
+  private voices = new Map<number, PianoVoice>();
+  private nextVoiceId = 0;
+
+  private readonly MAX_VOICES = 8;
+
   playNote(frequencyHz: number): void {
     if (!Number.isFinite(frequencyHz) || frequencyHz <= 0) {
       return;
     }
 
-    // Create AudioContext on the first user interaction.
     if (!this.ctx) {
       this.ctx = new AudioContext();
     }
@@ -25,64 +29,99 @@ export class PolyphonicSynth {
       void ctx.resume().catch(console.error);
     }
 
-    // Release the previous note.
-    this.releaseActiveVoice();
+    // If full, stop the oldest voice.
+    if (this.voices.size >= this.MAX_VOICES) {
+      const oldestId = this.voices.keys().next().value;
+
+      if (oldestId !== undefined) {
+        this.stopVoice(oldestId);
+      }
+    }
 
     const now = ctx.currentTime;
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
 
-    // Generate a simple piano-like tone.
     oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(frequencyHz, now);
 
-    // Short volume envelope to reduce clicking.
+    // Basic envelope, refined in HW2-07.
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.linearRampToValueAtTime(0.16, now + 0.015);
+    gain.gain.linearRampToValueAtTime(0.08, now + 0.015);
     gain.gain.exponentialRampToValueAtTime(
       0.0001,
-      now + 0.45
+      now + 1.5
     );
 
     oscillator.connect(gain);
     gain.connect(ctx.destination);
 
-    const voice: PianoVoice = { oscillator, gain };
-    this.activeVoice = voice;
+    const voiceId = ++this.nextVoiceId;
 
+    this.voices.set(voiceId, {
+      oscillator,
+      gain,
+      frequencyHz,
+    });
+
+    // Remove naturally finished notes.
     oscillator.onended = () => {
       oscillator.disconnect();
       gain.disconnect();
-
-      if (this.activeVoice === voice) {
-        this.activeVoice = null;
-      }
+      this.voices.delete(voiceId);
     };
 
     oscillator.start(now);
-    oscillator.stop(now + 0.46);
+    oscillator.stop(now + 1.51);
   }
 
-  private releaseActiveVoice(): void {
-    if (!this.ctx || !this.activeVoice) return;
+  private stopVoice(voiceId: number): void {
+    const voice = this.voices.get(voiceId);
 
-    const { gain } = this.activeVoice;
+    if (!voice || !this.ctx) return;
+
+    this.voices.delete(voiceId);
+
     const now = this.ctx.currentTime;
 
-    gain.gain.cancelScheduledValues(now);
-    gain.gain.setTargetAtTime(0.0001, now, 0.01);
+    // Immediate stop for the FIFO implementation.
+    // Smooth voice release will be added in HW2-07.
+    voice.gain.gain.cancelScheduledValues(now);
+    voice.gain.gain.setValueAtTime(0, now);
 
-    this.activeVoice = null;
+    try {
+      voice.oscillator.stop(now);
+    } catch {
+      // Ignore if the oscillator has already stopped.
+    }
+  }
+
+  stopAll(): void {
+    for (const voiceId of Array.from(this.voices.keys())) {
+      this.stopVoice(voiceId);
+    }
+  }
+
+  // Public inspection methods for testing.
+  getActiveVoiceCount(): number {
+    return this.voices.size;
+  }
+
+  getActiveFrequencies(): number[] {
+    return Array.from(
+      this.voices.values(),
+      (voice) => voice.frequencyHz
+    );
   }
 
   dispose(): void {
-    this.releaseActiveVoice();
+    this.stopAll();
 
     const ctx = this.ctx;
     this.ctx = null;
 
     if (ctx && ctx.state !== "closed") {
-      void ctx.close();
+      void ctx.close().catch(console.error);
     }
   }
 }
