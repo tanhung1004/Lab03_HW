@@ -18,7 +18,7 @@ optimistic claim handling, leaderboard and AI Failure Audit.
 - [x] HW3-09: Build PUBG Vietnam leaderboard.
 - [x] HW3-10: Implement leaderboard sorting, filtering and kill feed.
 - [x] HW3-11: Test concurrency, countdown and inventory consistency.
-- [ ] HW3-12: Document at least 3 verified AI failures and fixes.
+- [x] HW3-12: Document at least 3 verified AI failures and fixes.
 
 ## Definition of Done
 - Countdown stays accurate after background tab throttling.
@@ -286,3 +286,38 @@ HW3-11 — Virtual Scroller for Leaderboard.
 
 ### Next Task
 HW3-12 — Final QA, Accessibility and AI Failure Audit.
+
+
+## HW3-12 — Final QA & AI Failure Audit
+
+### Scope
+- Verify all existing features.
+- Check mobile responsiveness at 375px.
+- Review keyboard accessibility.
+- Run Chrome Lighthouse.
+- Complete AI_FAILURE_AUDIT.md.
+- Confirm clean build and Git status.
+
+### Verification
+- Production build: PENDING
+- Countdown and phase logic: PENDING
+- Optimistic Claim and rollback: PENDING
+- Concurrency tests: PENDING
+- Leaderboard search/sort: PENDING
+- Virtual scrolling: PENDING
+- Mobile responsiveness: PENDING
+- Lighthouse: PENDING
+- Three verified AI failures: PENDING
+
+### Known Limitations
+- In-memory Mock Claim API.
+- No cross-tab inventory synchronization.
+- Demo event timestamps may reset on reload.
+- Fixed-height virtual scrolling.
+
+### Completion Criteria
+Mark HW3-12 complete only after:
+1. All required tests pass.
+2. Three genuine AI failures are documented.
+3. Changes are committed and pushed.
+```
