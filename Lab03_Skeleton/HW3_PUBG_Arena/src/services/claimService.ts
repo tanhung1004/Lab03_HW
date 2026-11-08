@@ -1,17 +1,19 @@
 
 import { mockCrates } from "../data/mockCrates";
+import type { PubgCrateDrop } from "../types/arena";
 import { getDropPhase } from "./dropPhase";
 
 /**
- * HW3-08 — Mock Claim API
+ * HW3-09 — Mock Claim Server
  *
- * Simulates:
- * - Network latency.
+ * Supports:
+ * - Optimistic claim confirmation.
+ * - HTTP 409 simulation.
  * - Server-side stock validation.
- * - Successful claim.
- * - HTTP 409 Conflict.
+ * - Atomic inventory update within one JS runtime.
+ * - Independent server instances for concurrency tests.
  *
- * This is an in-memory mock, NOT a real HTTP server.
+ * This is NOT a real HTTP backend.
  */
 
 export interface ClaimResponse {
@@ -19,15 +21,6 @@ export interface ClaimResponse {
   remainingStock: number;
 }
 
-// Simulated authoritative inventory for this browser tab.
-const serverStock = new Map<string, number>(
-  mockCrates.map((crate) => [
-    crate.id,
-    crate.remainingStock,
-  ])
-);
-
-// An error that behaves like an HTTP error response.
 export class MockHttpError extends Error {
   readonly status: number;
   readonly remainingStock: number;
@@ -45,83 +38,127 @@ export class MockHttpError extends Error {
   }
 }
 
-// Simulate an 800ms network request.
+// Works in both browser and Node.js.
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
+    setTimeout(resolve, ms);
   });
 }
 
 /**
- * Simulated claim endpoint.
+ * Create an independent in-memory claim server.
  *
- * simulateConflict=true forces a 409 rejection
- * without consuming inventory.
+ * Each instance has its own stock Map, so tests
+ * cannot modify the main application's inventory.
  */
-export async function requestClaim(
+export function createMockClaimServer(
+  initialCrates: readonly PubgCrateDrop[],
+  latencyMs = 800
+) {
+  const crateById = new Map(
+    initialCrates.map((crate) => [
+      crate.id,
+      { ...crate },
+    ])
+  );
+
+  const serverStock = new Map<string, number>(
+    initialCrates.map((crate) => [
+      crate.id,
+      crate.remainingStock,
+    ])
+  );
+
+  async function claim(
+    crateId: string,
+    simulateConflict = false
+  ): Promise<ClaimResponse> {
+    // Simulate multiple requests arriving together.
+    await delay(latencyMs);
+
+    const crate = crateById.get(crateId);
+    const stock = serverStock.get(crateId);
+
+    if (!crate || stock === undefined) {
+      throw new Error("Crate does not exist.");
+    }
+
+    // Force HTTP 409 for rollback testing.
+    if (simulateConflict) {
+      throw new MockHttpError(
+        409,
+        "Conflict: simulated competing claim.",
+        stock
+      );
+    }
+
+    // Verify stock and event deadline.
+    const phase = getDropPhase(
+      {
+        ...crate,
+        remainingStock: stock,
+      },
+      Date.now()
+    );
+
+    if (phase !== "AIRDROP_LIVE") {
+      throw new MockHttpError(
+        409,
+        `Conflict: drop is ${phase}.`,
+        stock
+      );
+    }
+
+    if (stock <= 0) {
+      throw new MockHttpError(
+        409,
+        "Conflict: no stock remaining.",
+        stock
+      );
+    }
+
+    /**
+     * Critical section:
+     *
+     * No await between checking the stock
+     * and decreasing it.
+     *
+     * These operations execute together
+     * in this single JavaScript runtime.
+     */
+    const remainingStock = stock - 1;
+
+    serverStock.set(crateId, remainingStock);
+
+    return {
+      crateId,
+      remainingStock,
+    };
+  }
+
+  // Read-only accessor for concurrency tests.
+  function getStock(
+    crateId: string
+  ): number | undefined {
+    return serverStock.get(crateId);
+  }
+
+  return {
+    requestClaim: claim,
+    getStock,
+  };
+}
+
+// Main demo server used by the actual Claim buttons.
+const mainServer = createMockClaimServer(mockCrates);
+
+// Preserve the original API for App.tsx.
+export function requestClaim(
   crateId: string,
   simulateConflict = false
 ): Promise<ClaimResponse> {
-  await delay(800);
-
-  const stock = serverStock.get(crateId);
-
-  if (stock === undefined) {
-    throw new Error("Crate does not exist.");
-  }
-
-  // Deterministic 409 test case.
-  if (simulateConflict) {
-    throw new MockHttpError(
-      409,
-      "Conflict: simulated competing claim.",
-      stock
-    );
-  }
-
-  const originalCrate = mockCrates.find(
-    (crate) => crate.id === crateId
-  );
-
-  if (!originalCrate) {
-    throw new Error("Crate configuration not found.");
-  }
-
-  // Validate against authoritative stock and time.
-  const phase = getDropPhase(
-    {
-      ...originalCrate,
-      remainingStock: stock,
-    },
-    Date.now()
-  );
-
-  if (phase !== "AIRDROP_LIVE") {
-    throw new MockHttpError(
-      409,
-      `Conflict: drop is ${phase}.`,
-      stock
-    );
-  }
-
-  if (stock <= 0) {
-    throw new MockHttpError(
-      409,
-      "Conflict: no stock remaining.",
-      stock
-    );
-  }
-
-  /**
-   * Atomic within this JavaScript execution context:
-   * there is no await between checking and
-   * updating the server stock.
-   */
-  const updatedStock = stock - 1;
-  serverStock.set(crateId, updatedStock);
-
-  return {
+  return mainServer.requestClaim(
     crateId,
-    remainingStock: updatedStock,
-  };
+    simulateConflict
+  );
 }
