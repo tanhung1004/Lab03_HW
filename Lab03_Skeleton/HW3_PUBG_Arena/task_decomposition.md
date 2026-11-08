@@ -17,7 +17,7 @@ optimistic claim handling, leaderboard and AI Failure Audit.
 - [x] HW3-08: Implement rollback when the server returns HTTP 409.
 - [x] HW3-09: Build PUBG Vietnam leaderboard.
 - [x] HW3-10: Implement leaderboard sorting, filtering and kill feed.
-- [ ] HW3-11: Test concurrency, countdown and inventory consistency.
+- [x] HW3-11: Test concurrency, countdown and inventory consistency.
 - [ ] HW3-12: Document at least 3 verified AI failures and fixes.
 
 ## Definition of Done
@@ -255,3 +255,34 @@ HW3-10 — Leaderboard Filtering and Sorting.
 
 ### Next Task
 HW3-11 — Virtual Scroller for Leaderboard.
+
+
+## HW3-11 — Virtualized Squad Leaderboard
+
+### Implementation
+- Extracted leaderboard into SquadLeaderboard component.
+- Implemented fixed-height virtual scrolling.
+- Used viewport-based start/end row indices.
+- Added overscan to improve scrolling continuity.
+- Preserved searching and sorting.
+- Added 1,000-squad stress test mode.
+- Preserved original 4-squad demo mode.
+- Supported horizontal scrolling on mobile.
+
+### Verification
+- Production build: PASS
+- Default squad list: PASS
+- 1,000-row stress mode: PASS
+- Rendered DOM rows significantly reduced: PASS
+- Scroll to final rows: PASS
+- Filtering and sorting: PASS
+- Existing claim and concurrency features: PASS
+
+### Limitations
+- Virtualization assumes fixed 52px row height.
+- Stress-test squads are fictional.
+- All records are still filtered and sorted in memory.
+- This is not server-side pagination.
+
+### Next Task
+HW3-12 — Final QA, Accessibility and AI Failure Audit.

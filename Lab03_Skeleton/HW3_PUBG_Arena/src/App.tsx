@@ -1,8 +1,10 @@
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { mockCrates } from "./data/mockCrates";
 import { mockSquads } from "./data/mockSquads";
+
+import SquadLeaderboard from "./components/SquadLeaderboard";
 import { useAirdropTimer } from "./hooks/useAirdropTimer";
 
 import {
@@ -22,41 +24,28 @@ import type { ConcurrencyTestResult } from "./services/concurrencyTest";
 import type {
   DropPhase,
   PubgCrateDrop,
-  PubgVnSquadStanding,
 } from "./types/arena";
 
 import "./style.css";
 
 /**
- * HW3-10 — PUBG Vietnam Arena
+ * HW3-11 — PUBG Vietnam Arena
  *
- * Previous features:
- * - Zero-drift countdown and visibility sync
- * - Four-state drop phase machine
- * - Optimistic claim and HTTP 409 rollback
- * - In-flight request locking
- * - Concurrency / oversell prevention tests
+ * Preserves previous tasks:
+ * - Airdrop countdown and phase state machine
+ * - Optimistic Claim
+ * - HTTP 409 rollback
+ * - Duplicate claim locking
+ * - Concurrency / oversell testing
  *
- * New features:
- * - Leaderboard search
- * - Sort by squad name, WWCD, placement, kills, total
- * - Ascending / descending order
- * - Dynamic result count and ranking
+ * New:
+ * - Virtualized PUBG Squad Leaderboard
  */
 
 type Feedback = {
   message: string;
   tone: "info" | "success" | "error";
 };
-
-type SortField =
-  | "total"
-  | "wwcd"
-  | "placement"
-  | "kills"
-  | "name";
-
-type SortDirection = "asc" | "desc";
 
 const phaseColors: Record<DropPhase, string> = {
   WARMUP: "#fbbf24",
@@ -65,64 +54,27 @@ const phaseColors: Record<DropPhase, string> = {
   EXPIRED: "#94a3b8",
 };
 
-const squadCollator = new Intl.Collator("vi", {
-  sensitivity: "base",
-  numeric: true,
-});
-
-function formatVnd(price: number): string {
-  return `${new Intl.NumberFormat("vi-VN").format(price)} đ`;
+function formatVnd(amount: number): string {
+  return `${new Intl.NumberFormat("vi-VN").format(amount)} đ`;
 }
 
 function formatCountdown(ms: number): string {
-  const totalSeconds = Math.ceil(
-    Math.max(0, ms) / 1000
-  );
+  const total = Math.ceil(Math.max(0, ms) / 1000);
 
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor(
-    (totalSeconds % 3600) / 60
-  );
-  const seconds = totalSeconds % 60;
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
 
   return [hours, minutes, seconds]
-    .map((value) => String(value).padStart(2, "0"))
+    .map((value) =>
+      String(value).padStart(2, "0")
+    )
     .join(":");
 }
 
-// Calculate total tournament points.
-function getTotalPoints(
-  squad: PubgVnSquadStanding
-): number {
-  return squad.placementPts + squad.killPts;
-}
-
-// Read the selected numeric sorting metric.
-function getSortScore(
-  squad: PubgVnSquadStanding,
-  field: SortField
-): number {
-  switch (field) {
-    case "total":
-      return getTotalPoints(squad);
-
-    case "wwcd":
-      return squad.wwcdCount;
-
-    case "placement":
-      return squad.placementPts;
-
-    case "kills":
-      return squad.killPts;
-
-    case "name":
-      return 0;
-  }
-}
-
-// =====================================
+// ===================================
 // CRATE CARD
-// =====================================
+// ===================================
 
 interface CrateCardProps {
   crate: PubgCrateDrop;
@@ -228,7 +180,9 @@ function CrateCard({
 
           <strong
             className="crate-countdown"
-            style={{ color: phaseColors[phase] }}
+            style={{
+              color: phaseColors[phase],
+            }}
             role="timer"
           >
             {timerText}
@@ -289,8 +243,8 @@ function CrateCard({
               : "status"
           }
           style={{
-            marginTop: 12,
             color: feedbackColor,
+            marginTop: 12,
             fontSize: 13,
           }}
         >
@@ -301,14 +255,13 @@ function CrateCard({
   );
 }
 
-// =====================================
-// HW3-09: CONCURRENCY TEST LAB
-// =====================================
+// ===================================
+// CONCURRENCY TEST LAB
+// ===================================
 
 function ConcurrencyTestLab() {
-  const [testResults, setTestResults] = useState<
-    ConcurrencyTestResult[]
-  >([]);
+  const [testResults, setTestResults] =
+    useState<ConcurrencyTestResult[]>([]);
 
   const [isTesting, setIsTesting] =
     useState(false);
@@ -324,19 +277,18 @@ function ConcurrencyTestLab() {
     testRunningRef.current = true;
 
     setIsTesting(true);
-    setTestError("");
     setTestResults([]);
+    setTestError("");
 
     try {
       const results =
         await runConcurrencyTests();
 
       setTestResults(results);
-
       console.table(results);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(
-        "Concurrency test failed:",
+        "Concurrency tests failed:",
         error
       );
 
@@ -374,9 +326,8 @@ function ConcurrencyTestLab() {
 
       <div className="leaderboard-panel">
         <p>
-          Run simultaneous claims against limited
-          stock and verify that inventory never
-          becomes negative.
+          Run simultaneous claims against
+          limited stock to detect overselling.
         </p>
 
         <button
@@ -390,9 +341,6 @@ function ConcurrencyTestLab() {
             background: "#fbbf24",
             color: "#0f172a",
             fontWeight: 800,
-            cursor: isTesting
-              ? "wait"
-              : "pointer",
           }}
         >
           {isTesting
@@ -465,7 +413,6 @@ function ConcurrencyTestLab() {
                         color: result.passed
                           ? "#86efac"
                           : "#fda4af",
-                        fontWeight: 700,
                       }}
                     >
                       {result.passed
@@ -481,292 +428,22 @@ function ConcurrencyTestLab() {
 
         <p
           style={{
-            color: "#94a3b8",
-            fontSize: 13,
-            marginTop: 16,
-          }}
-        >
-          Demo limitation: concurrency tests run
-          within one JavaScript runtime, not
-          across real servers.
-        </p>
-      </div>
-    </section>
-  );
-}
-
-// =====================================
-// HW3-10: LEADERBOARD SEARCH & SORT
-// =====================================
-
-function SquadLeaderboard() {
-  const [search, setSearch] = useState("");
-
-  const [sortBy, setSortBy] =
-    useState<SortField>("total");
-
-  const [direction, setDirection] =
-    useState<SortDirection>("desc");
-
-  /**
-   * Filtering and sorting are derived values.
-   * Never mutate the imported mockSquads array.
-   */
-  const visibleSquads = useMemo(() => {
-    const keyword = search
-      .trim()
-      .toLocaleLowerCase("vi");
-
-    const filtered = mockSquads.filter(
-      (squad) =>
-        squad.squadName
-          .toLocaleLowerCase("vi")
-          .includes(keyword)
-    );
-
-    return filtered.sort((a, b) => {
-      let comparison: number;
-
-      if (sortBy === "name") {
-        comparison = squadCollator.compare(
-          a.squadName,
-          b.squadName
-        );
-      } else {
-        comparison =
-          getSortScore(a, sortBy) -
-          getSortScore(b, sortBy);
-      }
-
-      // Apply ascending or descending order.
-      const ordered =
-        direction === "asc"
-          ? comparison
-          : -comparison;
-
-      // Stable alphabetical tie-breaker.
-      return (
-        ordered ||
-        squadCollator.compare(
-          a.squadName,
-          b.squadName
-        )
-      );
-    });
-  }, [search, sortBy, direction]);
-
-  const fieldStyle = {
-    width: "100%",
-    padding: "11px 12px",
-    borderRadius: 8,
-    border: "1px solid #475569",
-    background: "#0f172a",
-    color: "#f8fafc",
-  };
-
-  return (
-    <section
-      className="arena-section"
-      aria-labelledby="leaderboard-title"
-    >
-      <div className="section-heading">
-        <div>
-          <span className="section-tag">
-            VIETNAM ESPORTS
-          </span>
-
-          <h2 id="leaderboard-title">
-            Squad Leaderboard
-          </h2>
-        </div>
-
-        <p>Search and sort squad standings</p>
-      </div>
-
-      <div className="leaderboard-panel">
-        {/* Search and sorting controls */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(190px, 1fr))",
-            gap: 14,
-            marginBottom: 20,
-          }}
-        >
-          <div>
-            <label
-              htmlFor="squad-search"
-              style={{ display: "block", marginBottom: 7 }}
-            >
-              Search Squad
-            </label>
-
-            <input
-              id="squad-search"
-              type="search"
-              placeholder="Search squad name..."
-              value={search}
-              onChange={(event) =>
-                setSearch(event.target.value)
-              }
-              style={fieldStyle}
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="squad-sort"
-              style={{ display: "block", marginBottom: 7 }}
-            >
-              Sort By
-            </label>
-
-            <select
-              id="squad-sort"
-              value={sortBy}
-              onChange={(event) =>
-                setSortBy(
-                  event.target.value as SortField
-                )
-              }
-              style={fieldStyle}
-            >
-              <option value="total">
-                Total Points
-              </option>
-              <option value="wwcd">
-                WWCD
-              </option>
-              <option value="placement">
-                Placement Points
-              </option>
-              <option value="kills">
-                Kill Points
-              </option>
-              <option value="name">
-                Squad Name
-              </option>
-            </select>
-          </div>
-
-          <div>
-            <label
-              htmlFor="squad-direction"
-              style={{ display: "block", marginBottom: 7 }}
-            >
-              Order
-            </label>
-
-            <select
-              id="squad-direction"
-              value={direction}
-              onChange={(event) =>
-                setDirection(
-                  event.target.value as SortDirection
-                )
-              }
-              style={fieldStyle}
-            >
-              <option value="desc">
-                Descending
-              </option>
-              <option value="asc">
-                Ascending
-              </option>
-            </select>
-          </div>
-        </div>
-
-        {/* Filtered result count */}
-        <p
-          role="status"
-          aria-live="polite"
-          style={{
-            color: "#94a3b8",
-            fontSize: 13,
-            marginBottom: 16,
-          }}
-        >
-          Showing {visibleSquads.length} of{" "}
-          {mockSquads.length} squads
-        </p>
-
-        {/* Leaderboard table */}
-        <div
-          className="leaderboard-scroll"
-          role="region"
-          aria-label="Vietnam squad standings"
-          tabIndex={0}
-        >
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Rank</th>
-                <th scope="col">Squad</th>
-                <th scope="col">WWCD</th>
-                <th scope="col">Placement</th>
-                <th scope="col">Kills</th>
-                <th scope="col">Total</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {visibleSquads.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    style={{
-                      textAlign: "center",
-                      color: "#94a3b8",
-                      padding: 24,
-                    }}
-                  >
-                    No squads found.
-                  </td>
-                </tr>
-              ) : (
-                visibleSquads.map((squad, index) => (
-                  <tr key={squad.squadId}>
-                    <td>{index + 1}</td>
-
-                    <th scope="row">
-                      {squad.squadName}
-                    </th>
-
-                    <td>{squad.wwcdCount}</td>
-                    <td>{squad.placementPts}</td>
-                    <td>{squad.killPts}</td>
-
-                    <td className="total-points">
-                      {getTotalPoints(squad)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <p
-          style={{
             marginTop: 14,
             color: "#94a3b8",
-            fontSize: 12,
+            fontSize: 13,
           }}
         >
-          Total Points = Placement Points + Kill Points.
-          Rankings shown are based on the selected
-          sorting order. Demo statistics are fictional.
+          Demo only: this test uses one
+          JavaScript runtime, not real servers.
         </p>
       </div>
     </section>
   );
 }
 
-// =====================================
+// ===================================
 // MAIN APP
-// =====================================
+// ===================================
 
 export default function App() {
   const [crates, setCrates] = useState<
@@ -791,7 +468,6 @@ export default function App() {
     new Set()
   );
 
-  // Enable or disable forced 409 conflict.
   function handleConflictChange(
     crateId: string,
     enabled: boolean
@@ -809,9 +485,8 @@ export default function App() {
     });
   }
 
-  // HW3-08: Optimistic Claim + Rollback.
+  // HW3-08: Optimistic Claim + 409 rollback.
   async function handleClaim(crateId: string) {
-    // Synchronous duplicate-request protection.
     if (inFlightIds.current.has(crateId)) {
       return;
     }
@@ -829,6 +504,7 @@ export default function App() {
       return;
     }
 
+    // Lock before asynchronous work.
     inFlightIds.current.add(crateId);
 
     setPendingIds((previous) =>
@@ -843,7 +519,7 @@ export default function App() {
       },
     }));
 
-    // Decrease stock optimistically.
+    // Optimistic stock decrement.
     setCrates((previous) =>
       previous.map((item) =>
         item.id === crateId
@@ -859,19 +535,19 @@ export default function App() {
     );
 
     try {
-      const response = await requestClaim(
+      const result = await requestClaim(
         crateId,
         conflictIds.has(crateId)
       );
 
-      // Server-confirmed stock.
+      // Synchronize with mock server stock.
       setCrates((previous) =>
         previous.map((item) =>
           item.id === crateId
             ? {
                 ...item,
                 remainingStock:
-                  response.remainingStock,
+                  result.remainingStock,
               }
             : item
         )
@@ -887,14 +563,17 @@ export default function App() {
       }));
     } catch (error: unknown) {
       if (error instanceof MockHttpError) {
-        // Rollback to authoritative mock stock.
+        const authoritativeStock =
+          error.remainingStock;
+
+        // Roll back to authoritative stock.
         setCrates((previous) =>
           previous.map((item) =>
             item.id === crateId
               ? {
                   ...item,
                   remainingStock:
-                    error.remainingStock,
+                    authoritativeStock,
                 }
               : item
           )
@@ -915,7 +594,7 @@ export default function App() {
           error.message
         );
       } else {
-        // Revert unexpected failed claim.
+        // Revert a failed optimistic update.
         setCrates((previous) =>
           previous.map((item) =>
             item.id === crateId
@@ -1051,10 +730,10 @@ export default function App() {
         </div>
       </section>
 
-      {/* HW3-09: Previous concurrency tests */}
+      {/* HW3-09 — Oversell prevention */}
       <ConcurrencyTestLab />
 
-      {/* HW3-10: Searchable, sortable leaderboard */}
+      {/* HW3-11 — Virtualized leaderboard */}
       <SquadLeaderboard />
 
       {/* Footer */}
