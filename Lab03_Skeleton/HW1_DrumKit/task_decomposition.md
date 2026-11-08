@@ -15,7 +15,7 @@ reusing accessibility and keyboard techniques from Lab 02.
 - [x] HW1-06: Implement drum sounds using Web Audio API.
 - [x] HW1-07: Add accessible buttons and focus management.
 - [x] HW1-08: Implement visual hit history and decibel meter.
-- [ ] HW1-09: Test keyboard, audio, accessibility and responsive UI.
+- [x] HW1-09: Test keyboard, audio, accessibility and responsive UI.
 - [ ] HW1-10: Run Lighthouse audit, fix issues and document results.
 
 ## Definition of Done
