@@ -8,7 +8,7 @@ optimistic claim handling, leaderboard and AI Failure Audit.
 ## Tasks
 
 - [x] HW3-01: Review Lab 02 timer, inventory and virtual list code.
-- [ ] HW3-02: Define PUBG domain types and mock data.
+- [x] HW3-02: Define PUBG domain types and mock data.
 - [ ] HW3-03: Build responsive esports dashboard UI.
 - [ ] HW3-04: Implement usePubgAirdropTimer.
 - [ ] HW3-05: Handle visibilitychange and timer synchronization.
@@ -62,3 +62,30 @@ the PUBG Vietnam Arena.
 
 ### Next Task
 HW3-02 — Define PUBG domain types and mock data.
+
+
+## HW3-02 — PUBG Domain Types & Mock Data
+
+### Implementation
+- Defined DropPhase union type.
+- Defined PubgCrateDrop interface.
+- Defined PubgVnSquadStanding interface.
+- Created 3 mock ticket/crate items.
+- Created 4 mock PUBG Vietnam squads.
+- Used readonly fields for safer state management.
+
+### Verification
+- TypeScript build: PASS
+- Mock crates: 3
+- Mock squads: 4
+- Unique identifiers: PASS
+- Data validation: PASS
+
+### Notes
+- Prices, standings, and stock are fictional demo data.
+- Drop timestamps currently reset on page reload.
+- Backend-driven timestamps will be considered later.
+
+### Next Task
+HW3-03 — Build Responsive PUBG Arena Dashboard.
+
