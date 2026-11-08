@@ -16,7 +16,7 @@ optimistic claim handling, leaderboard and AI Failure Audit.
 - [x] HW3-07: Add duplicate-request prevention using claimId lock.
 - [x] HW3-08: Implement rollback when the server returns HTTP 409.
 - [x] HW3-09: Build PUBG Vietnam leaderboard.
-- [ ] HW3-10: Implement leaderboard sorting, filtering and kill feed.
+- [x] HW3-10: Implement leaderboard sorting, filtering and kill feed.
 - [ ] HW3-11: Test concurrency, countdown and inventory consistency.
 - [ ] HW3-12: Document at least 3 verified AI failures and fixes.
 
@@ -228,3 +228,30 @@ HW3-09 — Concurrency & Oversell Prevention Tests.
 
 ### Next Task
 HW3-10 — Leaderboard Filtering and Sorting.
+
+
+## HW3-10 — Leaderboard Filtering & Sorting
+
+### Implementation
+- Implemented squad name filtering.
+- Added case-insensitive search.
+- Added sorting by Total Points.
+- Added WWCD, Placement and Kill sorting.
+- Added alphabetical squad name sorting.
+- Supported ascending and descending order.
+- Added dynamic ranking and result counts.
+- Added empty search result feedback.
+- Preserved previous Claim and Concurrency features.
+
+### Verification
+- Squad search: PASS
+- Case-insensitive matching: PASS
+- Total Points sorting: PASS
+- Numeric metric sorting: PASS
+- Ascending/descending: PASS
+- Empty results: PASS
+- Existing features regression: PASS
+- Production build: PASS
+
+### Next Task
+HW3-11 — Virtual Scroller for Leaderboard.

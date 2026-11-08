@@ -1,44 +1,62 @@
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+
 import { mockCrates } from "./data/mockCrates";
 import { mockSquads } from "./data/mockSquads";
 import { useAirdropTimer } from "./hooks/useAirdropTimer";
+
 import {
+  DROP_LIVE_DURATION_MS,
   getDropPhase,
   getPhaseLabel,
-  DROP_LIVE_DURATION_MS,
 } from "./services/dropPhase";
+
 import {
-  requestClaim,
   MockHttpError,
+  requestClaim,
 } from "./services/claimService";
+
 import { runConcurrencyTests } from "./services/concurrencyTest";
-import type {
-  ConcurrencyTestResult,
-} from "./services/concurrencyTest";
+
+import type { ConcurrencyTestResult } from "./services/concurrencyTest";
 import type {
   DropPhase,
   PubgCrateDrop,
+  PubgVnSquadStanding,
 } from "./types/arena";
+
 import "./style.css";
 
 /**
- * HW3-09 — PUBG Vietnam Arena
+ * HW3-10 — PUBG Vietnam Arena
  *
- * Includes:
- * - Zero-drift Airdrop countdown
- * - Drop phase state machine
- * - Optimistic inventory updates
- * - Simulated HTTP 409 rollback
- * - Duplicate request protection
- * - Concurrency / oversell tests
- * - PUBG squad leaderboard
+ * Previous features:
+ * - Zero-drift countdown and visibility sync
+ * - Four-state drop phase machine
+ * - Optimistic claim and HTTP 409 rollback
+ * - In-flight request locking
+ * - Concurrency / oversell prevention tests
+ *
+ * New features:
+ * - Leaderboard search
+ * - Sort by squad name, WWCD, placement, kills, total
+ * - Ascending / descending order
+ * - Dynamic result count and ranking
  */
 
 type Feedback = {
   message: string;
   tone: "info" | "success" | "error";
 };
+
+type SortField =
+  | "total"
+  | "wwcd"
+  | "placement"
+  | "kills"
+  | "name";
+
+type SortDirection = "asc" | "desc";
 
 const phaseColors: Record<DropPhase, string> = {
   WARMUP: "#fbbf24",
@@ -47,27 +65,66 @@ const phaseColors: Record<DropPhase, string> = {
   EXPIRED: "#94a3b8",
 };
 
+const squadCollator = new Intl.Collator("vi", {
+  sensitivity: "base",
+  numeric: true,
+});
+
 function formatVnd(price: number): string {
   return `${new Intl.NumberFormat("vi-VN").format(price)} đ`;
 }
 
 function formatCountdown(ms: number): string {
-  const total = Math.ceil(Math.max(0, ms) / 1000);
+  const totalSeconds = Math.ceil(
+    Math.max(0, ms) / 1000
+  );
 
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const seconds = total % 60;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor(
+    (totalSeconds % 3600) / 60
+  );
+  const seconds = totalSeconds % 60;
 
   return [hours, minutes, seconds]
     .map((value) => String(value).padStart(2, "0"))
     .join(":");
 }
 
-// -------------------------------
-// CRATE CARD
-// -------------------------------
+// Calculate total tournament points.
+function getTotalPoints(
+  squad: PubgVnSquadStanding
+): number {
+  return squad.placementPts + squad.killPts;
+}
 
-type CrateCardProps = {
+// Read the selected numeric sorting metric.
+function getSortScore(
+  squad: PubgVnSquadStanding,
+  field: SortField
+): number {
+  switch (field) {
+    case "total":
+      return getTotalPoints(squad);
+
+    case "wwcd":
+      return squad.wwcdCount;
+
+    case "placement":
+      return squad.placementPts;
+
+    case "kills":
+      return squad.killPts;
+
+    case "name":
+      return 0;
+  }
+}
+
+// =====================================
+// CRATE CARD
+// =====================================
+
+interface CrateCardProps {
   crate: PubgCrateDrop;
   pending: boolean;
   forceConflict: boolean;
@@ -77,7 +134,7 @@ type CrateCardProps = {
     id: string,
     enabled: boolean
   ) => void;
-};
+}
 
 function CrateCard({
   crate,
@@ -93,7 +150,7 @@ function CrateCard({
   const phase = getDropPhase(crate, nowMs);
   const phaseLabel = getPhaseLabel(phase);
 
-  const liveRemaining = Math.max(
+  const liveRemainingMs = Math.max(
     0,
     crate.dropEpochMs +
       DROP_LIVE_DURATION_MS -
@@ -111,7 +168,7 @@ function CrateCard({
     phase === "WARMUP"
       ? formatCountdown(remainingMs)
       : phase === "AIRDROP_LIVE"
-        ? formatCountdown(liveRemaining)
+        ? formatCountdown(liveRemainingMs)
         : phase === "LOOTED_OUT"
           ? "All Rewards Claimed"
           : "Event Window Closed";
@@ -119,7 +176,7 @@ function CrateCard({
   const canClaim =
     phase === "AIRDROP_LIVE" && !pending;
 
-  const claimLabel = pending
+  const claimText = pending
     ? "Processing Claim..."
     : phase === "AIRDROP_LIVE"
       ? "Claim Reward"
@@ -128,6 +185,13 @@ function CrateCard({
         : phase === "LOOTED_OUT"
           ? "Sold Out"
           : "Drop Expired";
+
+  const feedbackColor =
+    feedback?.tone === "error"
+      ? "#fda4af"
+      : feedback?.tone === "success"
+        ? "#86efac"
+        : "#93c5fd";
 
   return (
     <article className="crate-card">
@@ -161,6 +225,7 @@ function CrateCard({
 
         <p>
           <span>{timerTitle}</span>
+
           <strong
             className="crate-countdown"
             style={{ color: phaseColors[phase] }}
@@ -189,7 +254,7 @@ function CrateCard({
           fontWeight: 700,
         }}
       >
-        {claimLabel}
+        {claimText}
       </button>
 
       <label
@@ -198,6 +263,8 @@ function CrateCard({
           alignItems: "center",
           gap: 8,
           marginTop: 14,
+          color: "#cbd5e1",
+          fontSize: 13,
         }}
       >
         <input
@@ -223,12 +290,8 @@ function CrateCard({
           }
           style={{
             marginTop: 12,
-            color:
-              feedback.tone === "error"
-                ? "#fda4af"
-                : feedback.tone === "success"
-                  ? "#86efac"
-                  : "#93c5fd",
+            color: feedbackColor,
+            fontSize: 13,
           }}
         >
           {feedback.message}
@@ -238,15 +301,479 @@ function CrateCard({
   );
 }
 
-// -------------------------------
+// =====================================
+// HW3-09: CONCURRENCY TEST LAB
+// =====================================
+
+function ConcurrencyTestLab() {
+  const [testResults, setTestResults] = useState<
+    ConcurrencyTestResult[]
+  >([]);
+
+  const [isTesting, setIsTesting] =
+    useState(false);
+
+  const [testError, setTestError] =
+    useState("");
+
+  const testRunningRef = useRef(false);
+
+  async function handleRunTests() {
+    if (testRunningRef.current) return;
+
+    testRunningRef.current = true;
+
+    setIsTesting(true);
+    setTestError("");
+    setTestResults([]);
+
+    try {
+      const results =
+        await runConcurrencyTests();
+
+      setTestResults(results);
+
+      console.table(results);
+    } catch (error) {
+      console.error(
+        "Concurrency test failed:",
+        error
+      );
+
+      setTestError(
+        "Unable to complete concurrency tests."
+      );
+    } finally {
+      testRunningRef.current = false;
+      setIsTesting(false);
+    }
+  }
+
+  const allPassed =
+    testResults.length === 4 &&
+    testResults.every((result) => result.passed);
+
+  return (
+    <section
+      className="arena-section"
+      aria-labelledby="concurrency-title"
+    >
+      <div className="section-heading">
+        <div>
+          <span className="section-tag">
+            CONCURRENCY TESTING
+          </span>
+
+          <h2 id="concurrency-title">
+            Oversell Prevention Lab
+          </h2>
+        </div>
+
+        <p>Isolated mock server tests</p>
+      </div>
+
+      <div className="leaderboard-panel">
+        <p>
+          Run simultaneous claims against limited
+          stock and verify that inventory never
+          becomes negative.
+        </p>
+
+        <button
+          type="button"
+          disabled={isTesting}
+          onClick={() => void handleRunTests()}
+          style={{
+            padding: "12px 20px",
+            border: 0,
+            borderRadius: 9,
+            background: "#fbbf24",
+            color: "#0f172a",
+            fontWeight: 800,
+            cursor: isTesting
+              ? "wait"
+              : "pointer",
+          }}
+        >
+          {isTesting
+            ? "Running Tests..."
+            : "Run Concurrency Tests"}
+        </button>
+
+        <div role="status" aria-live="polite">
+          {isTesting && (
+            <p>Testing concurrent claims...</p>
+          )}
+
+          {testError && (
+            <p style={{ color: "#fda4af" }}>
+              {testError}
+            </p>
+          )}
+
+          {testResults.length > 0 && (
+            <p
+              style={{
+                color: allPassed
+                  ? "#86efac"
+                  : "#fda4af",
+                fontWeight: 700,
+              }}
+            >
+              {allPassed
+                ? "PASS — All 4 concurrency tests passed."
+                : "FAIL — Review test results."}
+            </p>
+          )}
+        </div>
+
+        {testResults.length > 0 && (
+          <div
+            className="leaderboard-scroll"
+            role="region"
+            aria-label="Concurrency test results"
+            tabIndex={0}
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Scenario</th>
+                  <th scope="col">Stock</th>
+                  <th scope="col">Requests</th>
+                  <th scope="col">Success</th>
+                  <th scope="col">409</th>
+                  <th scope="col">Final</th>
+                  <th scope="col">Result</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {testResults.map((result) => (
+                  <tr key={result.name}>
+                    <th scope="row">
+                      {result.name}
+                    </th>
+
+                    <td>{result.initialStock}</td>
+                    <td>{result.requests}</td>
+                    <td>{result.successes}</td>
+                    <td>{result.conflicts}</td>
+                    <td>{result.finalStock}</td>
+
+                    <td
+                      style={{
+                        color: result.passed
+                          ? "#86efac"
+                          : "#fda4af",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {result.passed
+                        ? "PASS"
+                        : "FAIL"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <p
+          style={{
+            color: "#94a3b8",
+            fontSize: 13,
+            marginTop: 16,
+          }}
+        >
+          Demo limitation: concurrency tests run
+          within one JavaScript runtime, not
+          across real servers.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// =====================================
+// HW3-10: LEADERBOARD SEARCH & SORT
+// =====================================
+
+function SquadLeaderboard() {
+  const [search, setSearch] = useState("");
+
+  const [sortBy, setSortBy] =
+    useState<SortField>("total");
+
+  const [direction, setDirection] =
+    useState<SortDirection>("desc");
+
+  /**
+   * Filtering and sorting are derived values.
+   * Never mutate the imported mockSquads array.
+   */
+  const visibleSquads = useMemo(() => {
+    const keyword = search
+      .trim()
+      .toLocaleLowerCase("vi");
+
+    const filtered = mockSquads.filter(
+      (squad) =>
+        squad.squadName
+          .toLocaleLowerCase("vi")
+          .includes(keyword)
+    );
+
+    return filtered.sort((a, b) => {
+      let comparison: number;
+
+      if (sortBy === "name") {
+        comparison = squadCollator.compare(
+          a.squadName,
+          b.squadName
+        );
+      } else {
+        comparison =
+          getSortScore(a, sortBy) -
+          getSortScore(b, sortBy);
+      }
+
+      // Apply ascending or descending order.
+      const ordered =
+        direction === "asc"
+          ? comparison
+          : -comparison;
+
+      // Stable alphabetical tie-breaker.
+      return (
+        ordered ||
+        squadCollator.compare(
+          a.squadName,
+          b.squadName
+        )
+      );
+    });
+  }, [search, sortBy, direction]);
+
+  const fieldStyle = {
+    width: "100%",
+    padding: "11px 12px",
+    borderRadius: 8,
+    border: "1px solid #475569",
+    background: "#0f172a",
+    color: "#f8fafc",
+  };
+
+  return (
+    <section
+      className="arena-section"
+      aria-labelledby="leaderboard-title"
+    >
+      <div className="section-heading">
+        <div>
+          <span className="section-tag">
+            VIETNAM ESPORTS
+          </span>
+
+          <h2 id="leaderboard-title">
+            Squad Leaderboard
+          </h2>
+        </div>
+
+        <p>Search and sort squad standings</p>
+      </div>
+
+      <div className="leaderboard-panel">
+        {/* Search and sorting controls */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(190px, 1fr))",
+            gap: 14,
+            marginBottom: 20,
+          }}
+        >
+          <div>
+            <label
+              htmlFor="squad-search"
+              style={{ display: "block", marginBottom: 7 }}
+            >
+              Search Squad
+            </label>
+
+            <input
+              id="squad-search"
+              type="search"
+              placeholder="Search squad name..."
+              value={search}
+              onChange={(event) =>
+                setSearch(event.target.value)
+              }
+              style={fieldStyle}
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="squad-sort"
+              style={{ display: "block", marginBottom: 7 }}
+            >
+              Sort By
+            </label>
+
+            <select
+              id="squad-sort"
+              value={sortBy}
+              onChange={(event) =>
+                setSortBy(
+                  event.target.value as SortField
+                )
+              }
+              style={fieldStyle}
+            >
+              <option value="total">
+                Total Points
+              </option>
+              <option value="wwcd">
+                WWCD
+              </option>
+              <option value="placement">
+                Placement Points
+              </option>
+              <option value="kills">
+                Kill Points
+              </option>
+              <option value="name">
+                Squad Name
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label
+              htmlFor="squad-direction"
+              style={{ display: "block", marginBottom: 7 }}
+            >
+              Order
+            </label>
+
+            <select
+              id="squad-direction"
+              value={direction}
+              onChange={(event) =>
+                setDirection(
+                  event.target.value as SortDirection
+                )
+              }
+              style={fieldStyle}
+            >
+              <option value="desc">
+                Descending
+              </option>
+              <option value="asc">
+                Ascending
+              </option>
+            </select>
+          </div>
+        </div>
+
+        {/* Filtered result count */}
+        <p
+          role="status"
+          aria-live="polite"
+          style={{
+            color: "#94a3b8",
+            fontSize: 13,
+            marginBottom: 16,
+          }}
+        >
+          Showing {visibleSquads.length} of{" "}
+          {mockSquads.length} squads
+        </p>
+
+        {/* Leaderboard table */}
+        <div
+          className="leaderboard-scroll"
+          role="region"
+          aria-label="Vietnam squad standings"
+          tabIndex={0}
+        >
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Rank</th>
+                <th scope="col">Squad</th>
+                <th scope="col">WWCD</th>
+                <th scope="col">Placement</th>
+                <th scope="col">Kills</th>
+                <th scope="col">Total</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {visibleSquads.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    style={{
+                      textAlign: "center",
+                      color: "#94a3b8",
+                      padding: 24,
+                    }}
+                  >
+                    No squads found.
+                  </td>
+                </tr>
+              ) : (
+                visibleSquads.map((squad, index) => (
+                  <tr key={squad.squadId}>
+                    <td>{index + 1}</td>
+
+                    <th scope="row">
+                      {squad.squadName}
+                    </th>
+
+                    <td>{squad.wwcdCount}</td>
+                    <td>{squad.placementPts}</td>
+                    <td>{squad.killPts}</td>
+
+                    <td className="total-points">
+                      {getTotalPoints(squad)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <p
+          style={{
+            marginTop: 14,
+            color: "#94a3b8",
+            fontSize: 12,
+          }}
+        >
+          Total Points = Placement Points + Kill Points.
+          Rankings shown are based on the selected
+          sorting order. Demo statistics are fictional.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// =====================================
 // MAIN APP
-// -------------------------------
+// =====================================
 
 export default function App() {
-  // Local optimistic inventory.
   const [crates, setCrates] = useState<
     PubgCrateDrop[]
-  >(() => mockCrates.map((crate) => ({ ...crate })));
+  >(() =>
+    mockCrates.map((crate) => ({ ...crate }))
+  );
 
   const [pendingIds, setPendingIds] = useState<
     Set<string>
@@ -260,25 +787,11 @@ export default function App() {
     Record<string, Feedback>
   >({});
 
-  // Synchronous lock for duplicate clicks.
   const inFlightIds = useRef<Set<string>>(
     new Set()
   );
 
-  // Concurrency test state.
-  const [testResults, setTestResults] = useState<
-    ConcurrencyTestResult[]
-  >([]);
-
-  const [isTesting, setIsTesting] =
-    useState(false);
-
-  const [testError, setTestError] =
-    useState("");
-
-  const testRunningRef = useRef(false);
-
-  // Toggle the simulated 409 conflict.
+  // Enable or disable forced 409 conflict.
   function handleConflictChange(
     crateId: string,
     enabled: boolean
@@ -296,12 +809,9 @@ export default function App() {
     });
   }
 
-  // -------------------------------
-  // OPTIMISTIC CLAIM + ROLLBACK
-  // -------------------------------
-
+  // HW3-08: Optimistic Claim + Rollback.
   async function handleClaim(crateId: string) {
-    // Prevent repeated requests.
+    // Synchronous duplicate-request protection.
     if (inFlightIds.current.has(crateId)) {
       return;
     }
@@ -312,7 +822,6 @@ export default function App() {
 
     if (!crate) return;
 
-    // Validate current stock and drop phase.
     if (
       getDropPhase(crate, Date.now()) !==
       "AIRDROP_LIVE"
@@ -320,7 +829,6 @@ export default function App() {
       return;
     }
 
-    // Lock synchronously.
     inFlightIds.current.add(crateId);
 
     setPendingIds((previous) =>
@@ -335,8 +843,7 @@ export default function App() {
       },
     }));
 
-    // Optimistic update:
-    // Decrease the inventory immediately.
+    // Decrease stock optimistically.
     setCrates((previous) =>
       previous.map((item) =>
         item.id === crateId
@@ -352,13 +859,12 @@ export default function App() {
     );
 
     try {
-      // Simulated API call.
       const response = await requestClaim(
         crateId,
         conflictIds.has(crateId)
       );
 
-      // Success: synchronize server stock.
+      // Server-confirmed stock.
       setCrates((previous) =>
         previous.map((item) =>
           item.id === crateId
@@ -381,7 +887,7 @@ export default function App() {
       }));
     } catch (error: unknown) {
       if (error instanceof MockHttpError) {
-        // HTTP 409: rollback to server stock.
+        // Rollback to authoritative mock stock.
         setCrates((previous) =>
           previous.map((item) =>
             item.id === crateId
@@ -409,7 +915,7 @@ export default function App() {
           error.message
         );
       } else {
-        // Unexpected error: undo one decrement.
+        // Revert unexpected failed claim.
         setCrates((previous) =>
           previous.map((item) =>
             item.id === crateId
@@ -434,7 +940,6 @@ export default function App() {
         console.error("Claim failed:", error);
       }
     } finally {
-      // Release the in-flight request lock.
       inFlightIds.current.delete(crateId);
 
       setPendingIds((previous) => {
@@ -444,48 +949,6 @@ export default function App() {
       });
     }
   }
-
-  // -------------------------------
-  // CONCURRENCY TESTS
-  // -------------------------------
-
-  async function handleRunTests() {
-    if (testRunningRef.current) return;
-
-    testRunningRef.current = true;
-
-    setIsTesting(true);
-    setTestResults([]);
-    setTestError("");
-
-    try {
-      const results =
-        await runConcurrencyTests();
-
-      setTestResults(results);
-      console.table(results);
-    } catch (error: unknown) {
-      console.error(
-        "Concurrency tests failed:",
-        error
-      );
-
-      setTestError(
-        "Unable to complete concurrency tests."
-      );
-    } finally {
-      testRunningRef.current = false;
-      setIsTesting(false);
-    }
-  }
-
-  const allTestsPassed =
-    testResults.length === 4 &&
-    testResults.every((result) => result.passed);
-
-  // -------------------------------
-  // RENDER
-  // -------------------------------
 
   return (
     <main className="arena">
@@ -548,7 +1011,7 @@ export default function App() {
         </div>
       </section>
 
-      {/* Crates */}
+      {/* Airdrop Cards */}
       <section
         className="arena-section"
         aria-labelledby="drops-title"
@@ -573,9 +1036,9 @@ export default function App() {
               key={crate.id}
               crate={crate}
               pending={pendingIds.has(crate.id)}
-              forceConflict={conflictIds.has(
-                crate.id
-              )}
+              forceConflict={
+                conflictIds.has(crate.id)
+              }
               feedback={feedbackById[crate.id]}
               onClaim={(id) => {
                 void handleClaim(id);
@@ -588,204 +1051,13 @@ export default function App() {
         </div>
       </section>
 
-      {/* Concurrency Test Lab */}
-      <section
-        className="arena-section"
-        aria-labelledby="concurrency-title"
-      >
-        <div className="section-heading">
-          <div>
-            <span className="section-tag">
-              CONCURRENCY TESTING
-            </span>
+      {/* HW3-09: Previous concurrency tests */}
+      <ConcurrencyTestLab />
 
-            <h2 id="concurrency-title">
-              Oversell Prevention Lab
-            </h2>
-          </div>
+      {/* HW3-10: Searchable, sortable leaderboard */}
+      <SquadLeaderboard />
 
-          <p>Isolated mock server tests</p>
-        </div>
-
-        <div className="leaderboard-panel">
-          <p>
-            Run simultaneous claims with limited
-            stock and check for overselling.
-          </p>
-
-          <button
-            type="button"
-            disabled={isTesting}
-            onClick={() => {
-              void handleRunTests();
-            }}
-            style={{
-              padding: "12px 20px",
-              border: 0,
-              borderRadius: 9,
-              background: "#fbbf24",
-              color: "#0f172a",
-              fontWeight: 800,
-              cursor: isTesting
-                ? "wait"
-                : "pointer",
-            }}
-          >
-            {isTesting
-              ? "Running Tests..."
-              : "Run Concurrency Tests"}
-          </button>
-
-          <div role="status" aria-live="polite">
-            {isTesting && (
-              <p>Testing concurrent claims...</p>
-            )}
-
-            {testError && (
-              <p style={{ color: "#fda4af" }}>
-                {testError}
-              </p>
-            )}
-
-            {testResults.length > 0 && (
-              <p
-                style={{
-                  color: allTestsPassed
-                    ? "#86efac"
-                    : "#fda4af",
-                  fontWeight: 700,
-                }}
-              >
-                {allTestsPassed
-                  ? "PASS — All 4 concurrency tests passed."
-                  : "FAIL — Review test results."}
-              </p>
-            )}
-          </div>
-
-          {testResults.length > 0 && (
-            <div
-              className="leaderboard-scroll"
-              role="region"
-              aria-label="Concurrency test results"
-              tabIndex={0}
-            >
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">Scenario</th>
-                    <th scope="col">Stock</th>
-                    <th scope="col">Requests</th>
-                    <th scope="col">Success</th>
-                    <th scope="col">409</th>
-                    <th scope="col">Final</th>
-                    <th scope="col">Result</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {testResults.map((result) => (
-                    <tr key={result.name}>
-                      <th scope="row">
-                        {result.name}
-                      </th>
-
-                      <td>{result.initialStock}</td>
-                      <td>{result.requests}</td>
-                      <td>{result.successes}</td>
-                      <td>{result.conflicts}</td>
-                      <td>{result.finalStock}</td>
-
-                      <td
-                        style={{
-                          color: result.passed
-                            ? "#86efac"
-                            : "#fda4af",
-                        }}
-                      >
-                        {result.passed
-                          ? "PASS"
-                          : "FAIL"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <p
-            style={{
-              color: "#94a3b8",
-              fontSize: 13,
-            }}
-          >
-            Demo limitation: one JavaScript
-            runtime, not a real multi-server test.
-          </p>
-        </div>
-      </section>
-
-      {/* Leaderboard */}
-      <section
-        className="arena-section"
-        aria-labelledby="leaderboard-title"
-      >
-        <div className="section-heading">
-          <div>
-            <span className="section-tag">
-              VIETNAM ESPORTS
-            </span>
-
-            <h2 id="leaderboard-title">
-              Squad Leaderboard
-            </h2>
-          </div>
-
-          <p>Sample standings</p>
-        </div>
-
-        <div className="leaderboard-panel">
-          <div
-            className="leaderboard-scroll"
-            role="region"
-            aria-label="Vietnam squad standings"
-            tabIndex={0}
-          >
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Squad</th>
-                  <th scope="col">WWCD</th>
-                  <th scope="col">Placement</th>
-                  <th scope="col">Kills</th>
-                  <th scope="col">Total</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {mockSquads.map((squad) => (
-                  <tr key={squad.squadId}>
-                    <th scope="row">
-                      {squad.squadName}
-                    </th>
-
-                    <td>{squad.wwcdCount}</td>
-                    <td>{squad.placementPts}</td>
-                    <td>{squad.killPts}</td>
-
-                    <td className="total-points">
-                      {squad.placementPts +
-                        squad.killPts}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
+      {/* Footer */}
       <footer className="arena-footer">
         Lab 03 — PUBG Vietnam Arena
 
