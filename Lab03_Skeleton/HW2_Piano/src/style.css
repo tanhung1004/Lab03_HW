@@ -234,3 +234,58 @@ body {
     transition: none;
   }
 }
+
+
+/* HW2-09: Melody Recorder */
+
+.recording-panel {
+  margin-top: 32px;
+  padding: 24px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+}
+
+.recording-panel h2 {
+  margin-top: 0;
+}
+
+.recording-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.recording-controls button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #34d399;
+  color: #052e16;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.recording-controls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.recording-controls button:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 3px;
+}
+
+.recording-panel output {
+  display: block;
+  margin: 16px 0;
+  color: #86efac;
+}
+
+.recorded-notes {
+  padding-left: 24px;
+  line-height: 1.9;
+  color: #cbd5e1;
+  overflow-wrap: anywhere;
+}

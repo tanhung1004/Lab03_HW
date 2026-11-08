@@ -6,7 +6,7 @@ interface PianoKeyProps {
   note: PianoKeyData;
   left: number;
   isActive: boolean;
-  onPlayNote: (frequencyHz: number) => void;
+  onPlayNote: (midi: number, frequencyHz: number) => void;
   onPressChange: (midi: number, pressed: boolean) => void;
 }
 
@@ -35,7 +35,7 @@ function PianoKey({
         }`}
         aria-label={`Play ${note.noteName}`}
         title={`${note.noteName} - ${note.frequencyHz.toFixed(2)} Hz`}
-        onClick={() => onPlayNote(note.frequencyHz)}
+        onClick={() => onPlayNote(note.midi, note.frequencyHz)}
         onPointerDown={(e) => {
           if (e.button === 0) {
             onPressChange(note.midi, true);

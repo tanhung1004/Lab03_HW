@@ -7,7 +7,7 @@ const WHITE_KEY_WIDTH = 44;
 const BLACK_KEY_WIDTH = 28;
 
 interface PianoKeyboardProps {
-  onPlayNote: (frequencyHz: number) => void;
+  onPlayNote: (midi: number, frequencyHz: number) => void;
 }
 
 let whiteKeyCount = 0;

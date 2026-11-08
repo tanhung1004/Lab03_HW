@@ -15,7 +15,7 @@ React.memo optimization and asynchronous melody playback.
 - [x] HW2-06: Implement 8-voice polyphony and FIFO voice stealing.
 - [x] HW2-07: Add ADSR-style gain ramp and audio cleanup.
 - [x] HW2-08: Optimize PianoKey using React.memo.
-- [ ] HW2-09: Implement note recording and FIFO sequence storage.
+- [x] HW2-09: Implement note recording and FIFO sequence storage.
 - [ ] HW2-10: Implement replay at 0.5x, 1x and 2x speeds.
 - [ ] HW2-11: Implement AbortController cancellation and test.
 
@@ -167,3 +167,4 @@ HW2-08 — Optimize PianoKey using React.memo.
 
 ### Next Task
 HW2-09 — Implement note recording and FIFO sequence storage.
+
