@@ -3,16 +3,18 @@ interface PianoVoice {
   oscillator: OscillatorNode;
   gain: GainNode;
   frequencyHz: number;
+  startAt: number;
 }
+
+const MAX_VOICES = 8;
+const ATTACK_TIME = 0.015;
+const RELEASE_TIME = 0.04;
+const NOTE_DURATION = 1.5;
 
 export class PolyphonicSynth {
   private ctx: AudioContext | null = null;
-
-  // Map preserves insertion order for FIFO.
   private voices = new Map<number, PianoVoice>();
   private nextVoiceId = 0;
-
-  private readonly MAX_VOICES = 8;
 
   playNote(frequencyHz: number): void {
     if (!Number.isFinite(frequencyHz) || frequencyHz <= 0) {
@@ -29,28 +31,35 @@ export class PolyphonicSynth {
       void ctx.resume().catch(console.error);
     }
 
-    // If full, stop the oldest voice.
-    if (this.voices.size >= this.MAX_VOICES) {
+    let startAt = ctx.currentTime;
+
+    // FIFO: release the oldest voice when reaching 8 voices.
+    if (this.voices.size >= MAX_VOICES) {
       const oldestId = this.voices.keys().next().value;
 
       if (oldestId !== undefined) {
-        this.stopVoice(oldestId);
+        // Wait until the old voice finishes its release.
+        startAt = this.releaseVoice(oldestId);
       }
     }
 
-    const now = ctx.currentTime;
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
 
     oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(frequencyHz, now);
+    oscillator.frequency.setValueAtTime(frequencyHz, startAt);
 
-    // Basic envelope, refined in HW2-07.
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.linearRampToValueAtTime(0.08, now + 0.015);
+    // Attack: gradually increase the volume.
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.linearRampToValueAtTime(
+      0.08,
+      startAt + ATTACK_TIME
+    );
+
+    // Natural decay.
     gain.gain.exponentialRampToValueAtTime(
       0.0001,
-      now + 1.5
+      startAt + NOTE_DURATION
     );
 
     oscillator.connect(gain);
@@ -62,47 +71,56 @@ export class PolyphonicSynth {
       oscillator,
       gain,
       frequencyHz,
+      startAt,
     });
 
-    // Remove naturally finished notes.
+    // Disconnect nodes after the oscillator ends.
     oscillator.onended = () => {
       oscillator.disconnect();
       gain.disconnect();
       this.voices.delete(voiceId);
     };
 
-    oscillator.start(now);
-    oscillator.stop(now + 1.51);
+    oscillator.start(startAt);
+    oscillator.stop(startAt + NOTE_DURATION + 0.01);
   }
 
-  private stopVoice(voiceId: number): void {
+  // Release a voice smoothly before stopping it.
+  private releaseVoice(voiceId: number): number {
     const voice = this.voices.get(voiceId);
+    const ctx = this.ctx;
 
-    if (!voice || !this.ctx) return;
+    if (!voice || !ctx) {
+      return ctx?.currentTime ?? 0;
+    }
 
     this.voices.delete(voiceId);
 
-    const now = this.ctx.currentTime;
+    const releaseStart = Math.max(
+      ctx.currentTime,
+      voice.startAt
+    );
+    const releaseEnd = releaseStart + RELEASE_TIME;
 
-    // Immediate stop for the FIFO implementation.
-    // Smooth voice release will be added in HW2-07.
-    voice.gain.gain.cancelScheduledValues(now);
-    voice.gain.gain.setValueAtTime(0, now);
+    // Keep the current gain value before fading.
+    voice.gain.gain.cancelAndHoldAtTime(releaseStart);
 
-    try {
-      voice.oscillator.stop(now);
-    } catch {
-      // Ignore if the oscillator has already stopped.
-    }
+    voice.gain.gain.linearRampToValueAtTime(
+      0.0001,
+      releaseEnd
+    );
+
+    voice.oscillator.stop(releaseEnd + 0.005);
+
+    return releaseEnd + 0.005;
   }
 
   stopAll(): void {
     for (const voiceId of Array.from(this.voices.keys())) {
-      this.stopVoice(voiceId);
+      this.releaseVoice(voiceId);
     }
   }
 
-  // Public inspection methods for testing.
   getActiveVoiceCount(): number {
     return this.voices.size;
   }
@@ -115,13 +133,17 @@ export class PolyphonicSynth {
   }
 
   dispose(): void {
-    this.stopAll();
-
     const ctx = this.ctx;
+    if (!ctx) return;
+
+    this.stopAll();
     this.ctx = null;
 
-    if (ctx && ctx.state !== "closed") {
-      void ctx.close().catch(console.error);
-    }
+    // Let release envelopes finish before closing audio.
+    window.setTimeout(() => {
+      if (ctx.state !== "closed") {
+        void ctx.close().catch(console.error);
+      }
+    }, 100);
   }
 }

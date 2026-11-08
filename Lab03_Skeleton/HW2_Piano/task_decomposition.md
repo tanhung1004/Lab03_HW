@@ -13,7 +13,7 @@ React.memo optimization and asynchronous melody playback.
 - [x] HW2-04: Build responsive piano keyboard UI.
 - [x] HW2-05: Implement the Web Audio PolyphonicSynth.
 - [x] HW2-06: Implement 8-voice polyphony and FIFO voice stealing.
-- [ ] HW2-07: Add ADSR-style gain ramp and audio cleanup.
+- [x] HW2-07: Add ADSR-style gain ramp and audio cleanup.
 - [ ] HW2-08: Optimize PianoKey using React.memo.
 - [ ] HW2-09: Implement note recording and FIFO sequence storage.
 - [ ] HW2-10: Implement replay at 0.5x, 1x and 2x speeds.
@@ -130,3 +130,22 @@ HW2-04 — Build Responsive Piano Keyboard UI.
 - Ninth note steals oldest voice: PASS
 - Voice cleanup: PASS
 - TypeScript/Vite build: PASS
+
+
+## HW2-07 — Gain Envelope & Audio Cleanup
+
+### Implementation
+- Added 15ms attack envelope.
+- Added 40ms release envelope.
+- Replaced abrupt FIFO stop with smooth voice release.
+- Added audio node cleanup via oscillator.onended.
+- Added AudioContext disposal.
+
+### Test Results
+- FIFO 9-note test: PASS
+- Smooth voice release: PASS
+- Voice cleanup: PASS
+- Production build: PASS
+
+### Next Task
+HW2-08 — Optimize PianoKey using React.memo.
