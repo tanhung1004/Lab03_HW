@@ -2,46 +2,161 @@
 import { mockCrates } from "./data/mockCrates";
 import { mockSquads } from "./data/mockSquads";
 import { useAirdropTimer } from "./hooks/useAirdropTimer";
+import {
+  DROP_LIVE_DURATION_MS,
+  getDropPhase,
+  getPhaseLabel,
+} from "./services/dropPhase";
+
+import type {
+  DropPhase,
+  PubgCrateDrop,
+} from "./types/arena";
+
 import "./style.css";
 
-// Format Vietnamese currency.
-const formatVnd = (amount: number): string => {
-  return `${new Intl.NumberFormat("vi-VN").format(amount)} đ`;
-};
+/**
+ * HW3-06 — PUBG Vietnam Arena
+ * Adds a four-state Airdrop Phase State Machine.
+ */
 
-// Countdown component for each crate.
-interface CrateCountdownProps {
-  targetEpochMs: number;
+// Vietnamese currency formatter.
+function formatVnd(amount: number): string {
+  return `${new Intl.NumberFormat("vi-VN").format(amount)} đ`;
 }
 
-function CrateCountdown({
-  targetEpochMs,
-}: CrateCountdownProps) {
-  const { remainingMs, isLive } =
-    useAirdropTimer(targetEpochMs);
-
-  const totalSeconds = Math.ceil(remainingMs / 1000);
+// Display milliseconds as HH:MM:SS.
+function formatCountdown(milliseconds: number): string {
+  const totalSeconds = Math.ceil(
+    Math.max(0, milliseconds) / 1000
+  );
 
   const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const minutes = Math.floor(
+    (totalSeconds % 3600) / 60
+  );
   const seconds = totalSeconds % 60;
 
-  const timeText = [hours, minutes, seconds]
+  return [hours, minutes, seconds]
     .map((value) => String(value).padStart(2, "0"))
     .join(":");
+}
+
+// Phase-specific colors.
+const phaseColors: Record<DropPhase, string> = {
+  WARMUP: "#fbbf24",
+  AIRDROP_LIVE: "#34d399",
+  LOOTED_OUT: "#fb7185",
+  EXPIRED: "#94a3b8",
+};
+
+interface CrateCardProps {
+  crate: PubgCrateDrop;
+}
+
+function CrateCard({ crate }: CrateCardProps) {
+  const { remainingMs, nowMs } = useAirdropTimer(
+    crate.dropEpochMs
+  );
+
+  // HW3-06: Derive phase from time and stock.
+  const phase = getDropPhase(crate, nowMs);
+  const phaseLabel = getPhaseLabel(phase);
+
+  const closesAt =
+    crate.dropEpochMs + DROP_LIVE_DURATION_MS;
+
+  const liveRemainingMs = Math.max(
+    0,
+    closesAt - nowMs
+  );
+
+  // Determine what the card should display.
+  let timerTitle = "Drop Status";
+  let timerText = "";
+  let claimText = "Claim — Unavailable";
+
+  switch (phase) {
+    case "WARMUP":
+      timerTitle = "Drop Starts In";
+      timerText = formatCountdown(remainingMs);
+      claimText = "Claim — Opens Soon";
+      break;
+
+    case "AIRDROP_LIVE":
+      timerTitle = "Drop Ends In";
+      timerText = formatCountdown(liveRemainingMs);
+
+      // Claim functionality is not implemented yet.
+      claimText = "Claim — Coming in HW3-07";
+      break;
+
+    case "LOOTED_OUT":
+      timerTitle = "Drop Status";
+      timerText = "All Rewards Claimed";
+      claimText = "Sold Out";
+      break;
+
+    case "EXPIRED":
+      timerTitle = "Drop Status";
+      timerText = "Event Window Closed";
+      claimText = "Drop Expired";
+      break;
+  }
 
   return (
-    <strong
-      className="crate-countdown"
-      role="timer"
-      aria-label={
-        isLive
-          ? "Drop time reached"
-          : `Time remaining: ${hours} hours, ${minutes} minutes, ${seconds} seconds`
-      }
-    >
-      {isLive ? "DROP TIME REACHED" : timeText}
-    </strong>
+    <article className="crate-card">
+      <div className="crate-top">
+        <span
+          className="crate-icon"
+          aria-hidden="true"
+        >
+          🎁
+        </span>
+
+        <span
+          className="crate-status"
+          style={{ color: phaseColors[phase] }}
+        >
+          {phaseLabel}
+        </span>
+      </div>
+
+      <h3>{crate.title}</h3>
+
+      <p className="crate-price">
+        {formatVnd(crate.priceVnd)}
+      </p>
+
+      <div className="crate-details">
+        <p>
+          <span>Remaining Stock</span>
+          <strong>{crate.remainingStock}</strong>
+        </p>
+
+        <p>
+          <span>{timerTitle}</span>
+
+          <strong
+            className="crate-countdown"
+            style={{ color: phaseColors[phase] }}
+            role="timer"
+            aria-label={`${phaseLabel}: ${timerText}`}
+          >
+            {timerText}
+          </strong>
+        </p>
+      </div>
+
+      {/* Claim logic belongs to a later task. */}
+      <button
+        type="button"
+        className="claim-button"
+        disabled
+      >
+        {claimText}
+      </button>
+    </article>
   );
 }
 
@@ -107,7 +222,7 @@ export default function App() {
         </div>
       </section>
 
-      {/* Airdrop & Ticket Cards */}
+      {/* Airdrop Cards */}
       <section
         className="arena-section"
         aria-labelledby="drops-title"
@@ -128,60 +243,15 @@ export default function App() {
 
         <div className="crates-grid">
           {mockCrates.map((crate) => (
-            <article
+            <CrateCard
               key={crate.id}
-              className="crate-card"
-            >
-              <div className="crate-top">
-                <span
-                  className="crate-icon"
-                  aria-hidden="true"
-                >
-                  🎁
-                </span>
-
-                <span className="crate-status">
-                  SCHEDULED
-                </span>
-              </div>
-
-              <h3>{crate.title}</h3>
-
-              <p className="crate-price">
-                {formatVnd(crate.priceVnd)}
-              </p>
-
-              <div className="crate-details">
-                <p>
-                  <span>Remaining Stock</span>
-
-                  <strong>
-                    {crate.remainingStock}
-                  </strong>
-                </p>
-
-                <p>
-                  <span>Drop Starts In</span>
-
-                  <CrateCountdown
-                    targetEpochMs={crate.dropEpochMs}
-                  />
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className="claim-button"
-                disabled
-              >
-                Claim — Coming Soon
-              </button>
-            </article>
+              crate={crate}
+            />
           ))}
         </div>
       </section>
 
-      {/* Vietnam Leaderboard */}
+      {/* Vietnam Squad Leaderboard */}
       <section
         className="arena-section"
         aria-labelledby="leaderboard-title"
@@ -230,17 +300,9 @@ export default function App() {
                         {squad.squadName}
                       </th>
 
-                      <td>
-                        {squad.wwcdCount}
-                      </td>
-
-                      <td>
-                        {squad.placementPts}
-                      </td>
-
-                      <td>
-                        {squad.killPts}
-                      </td>
+                      <td>{squad.wwcdCount}</td>
+                      <td>{squad.placementPts}</td>
+                      <td>{squad.killPts}</td>
 
                       <td className="total-points">
                         {total}

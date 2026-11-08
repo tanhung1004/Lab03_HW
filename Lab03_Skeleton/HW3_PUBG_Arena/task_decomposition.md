@@ -11,8 +11,8 @@ optimistic claim handling, leaderboard and AI Failure Audit.
 - [x] HW3-02: Define PUBG domain types and mock data.
 - [x] HW3-03: Build responsive esports dashboard UI.
 - [x] HW3-04: Implement usePubgAirdropTimer.
-- [ ] HW3-05: Handle visibilitychange and timer synchronization.
-- [ ] HW3-06: Implement optimistic crate/ticket claiming.
+- [x] HW3-05: Handle visibilitychange and timer synchronization.
+- [x] HW3-06: Implement optimistic crate/ticket claiming.
 - [ ] HW3-07: Add duplicate-request prevention using claimId lock.
 - [ ] HW3-08: Implement rollback when the server returns HTTP 409.
 - [ ] HW3-09: Build PUBG Vietnam leaderboard.
@@ -103,3 +103,31 @@ HW3-03 — Build Responsive PUBG Arena Dashboard.
 - Live countdown: HW3-04 / HW3-05
 - Claim and rollback: HW3-06 to HW3-08
 - Leaderboard sorting/filtering: HW3-10
+
+
+## HW3-06 — Drop Phase State Machine
+
+### Implementation
+- Implemented four DropPhase states.
+- WARMUP before opening time.
+- AIRDROP_LIVE during active event with stock.
+- LOOTED_OUT when stock reaches zero.
+- EXPIRED when the event window closes.
+- Defined a 15-minute demo live window.
+- Integrated dynamic status into reward cards.
+- Kept Claim disabled until the claim workflow task.
+
+### Verification
+- WARMUP transition: PASS
+- AIRDROP_LIVE transition: PASS
+- LOOTED_OUT transition: PASS
+- EXPIRED transition: PASS
+- Production build: PASS
+
+### Known Limitations
+- Stock is still mock data.
+- Drop deadlines reset on page reload.
+- The 15-minute window is a demo assumption.
+
+### Next Task
+HW3-07 — Optimistic Claim & Inventory Update.
