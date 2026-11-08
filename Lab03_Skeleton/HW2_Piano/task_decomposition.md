@@ -17,7 +17,7 @@ React.memo optimization and asynchronous melody playback.
 - [x] HW2-08: Optimize PianoKey using React.memo.
 - [x] HW2-09: Implement note recording and FIFO sequence storage.
 - [x] HW2-10: Implement replay at 0.5x, 1x and 2x speeds.
-- [ ] HW2-11: Implement AbortController cancellation and test.
+- [x] HW2-11: Implement AbortController cancellation and test.
 
 ## Definition of Done
 - Exactly 88 keys are generated without hardcoding.
@@ -192,3 +192,32 @@ HW2-09 — Implement note recording and FIFO sequence storage.
 
 ### Next Task
 HW2-11 — AbortController cancellation and final testing.
+
+
+## HW2-11 — AbortController & Final Testing
+
+### Implementation
+- Added Stop Sequence control.
+- Implemented AbortController cancellation.
+- Cancelled pending asynchronous delay promises.
+- Stopped active audio voices on user cancellation.
+- Added cleanup on component unmount.
+- Prevented overlapping replay sessions.
+
+### Verification
+- Recording FIFO order: PASS
+- Replay 0.5x / 1.0x / 2.0x: PASS
+- Stop during pending playback: PASS
+- Stop active audio: PASS
+- Replay after cancellation: PASS
+- 9-note FIFO test: PASS
+- Production build: PASS
+
+### Known Limitations
+- Recorded note duration remains fixed at 1500ms.
+- Audio is synthesized with sine oscillators.
+- Final React Profiler verification must be retained
+  as evidence for render isolation.
+
+### Final Status
+HW2 implementation complete, subject to final verification.

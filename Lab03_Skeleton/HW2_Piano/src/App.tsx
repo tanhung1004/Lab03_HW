@@ -7,44 +7,73 @@ import type { RecordedNote } from "./types/piano";
 
 type ReplaySpeed = 0.5 | 1 | 2;
 
-// Wait asynchronously between recorded notes.
-const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    window.setTimeout(resolve, Math.max(0, ms));
+// HW2-11: Create an abortable delay.
+function waitWithAbort(
+  ms: number,
+  signal: AbortSignal
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Replay stopped", "AbortError"));
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, Math.max(0, ms));
+
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+
+      reject(new DOMException("Replay stopped", "AbortError"));
+    };
+
+    signal.addEventListener("abort", onAbort, { once: true });
   });
+}
 
 export default function App() {
   const synthRef = useRef<PolyphonicSynth | null>(null);
 
+  // HW2-06: FIFO voice stealing test.
   const [testResult, setTestResult] = useState("Not tested");
+
+  // HW2-09: Recording.
   const [isRecording, setIsRecording] = useState(false);
   const [recordedNotes, setRecordedNotes] = useState<RecordedNote[]>([]);
-
-  // HW2-10: Replay state.
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [replayStatus, setReplayStatus] = useState("Not played yet.");
 
   const recordingRef = useRef(false);
   const recordingQueue = useRef<RecordedNote[]>([]);
   const previousNoteTime = useRef<number | null>(null);
 
-  const playingRef = useRef(false);
-  const replaySession = useRef(0);
+  // HW2-10/11: Replay and cancellation.
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [replayStatus, setReplayStatus] = useState("Not played yet.");
 
+  const playingRef = useRef(false);
+  const replayController = useRef<AbortController | null>(null);
+
+  // Piano statistics.
   const totalKeys = pianoKeys.length;
   const blackKeys = pianoKeys.filter((key) => key.isBlack).length;
   const whiteKeys = totalKeys - blackKeys;
 
+  // Reuse a single AudioContext through the synth.
   const getSynth = useCallback(() => {
     if (!synthRef.current) {
       synthRef.current = new PolyphonicSynth();
     }
+
     return synthRef.current;
   }, []);
 
-  // HW2-09: Recording.
+  // Start recording a new melody.
   const startRecording = () => {
-    if (playingRef.current) return;
+    if (playingRef.current || recordingRef.current) return;
+
+    synthRef.current?.stopAll();
 
     recordingQueue.current = [];
     previousNoteTime.current = null;
@@ -60,9 +89,9 @@ export default function App() {
     setIsRecording(false);
   };
 
+  // Play a piano note and record it when recording is enabled.
   const handlePlayNote = useCallback(
     (midi: number, frequencyHz: number) => {
-      // Avoid mixing manual notes with sequence replay.
       if (playingRef.current) return;
 
       getSynth().playNote(frequencyHz);
@@ -88,7 +117,7 @@ export default function App() {
     [getSynth]
   );
 
-  // HW2-10: Asynchronous FIFO sequence replay.
+  // HW2-10/11: Replay with AbortController support.
   const replaySequence = useCallback(
     async (speed: ReplaySpeed) => {
       if (
@@ -99,26 +128,32 @@ export default function App() {
         return;
       }
 
-      // Snapshot the FIFO queue before replay.
       const sequence = [...recordingQueue.current];
 
+      const controller = new AbortController();
+      replayController.current = controller;
       playingRef.current = true;
+
       setIsPlaying(true);
-      setReplayStatus(`Playing at ${speed}x speed...`);
+      setReplayStatus(`Playing at ${speed.toFixed(1)}x...`);
 
-      const session = ++replaySession.current;
       const synth = getSynth();
-
-      // Clear any notes left from manual playback.
       synth.stopAll();
 
       try {
+        // Replay each recorded note in FIFO order.
         for (const note of sequence) {
-          // Apply playback speed to recorded timing.
-          await delay(note.deltaMs / speed);
+          // First note has deltaMs = 0.
+          if (note.deltaMs > 0) {
+            await waitWithAbort(
+              note.deltaMs / speed,
+              controller.signal
+            );
+          }
 
-          // Do not continue after component cleanup.
-          if (session !== replaySession.current) return;
+          if (controller.signal.aborted) {
+            throw new DOMException("Replay stopped", "AbortError");
+          }
 
           synth.playNote(
             note.freqHz,
@@ -126,23 +161,37 @@ export default function App() {
           );
         }
 
-        // Let the last scheduled note finish.
-        const lastDuration =
-          sequence[sequence.length - 1].durationMs / speed;
+        // Wait for the last note to finish.
+        const last = sequence[sequence.length - 1];
 
-        await delay(lastDuration);
+        await waitWithAbort(
+          last.durationMs / speed + 60,
+          controller.signal
+        );
 
-        if (session === replaySession.current) {
-          setReplayStatus(`Replay completed at ${speed}x.`);
+        if (
+          !controller.signal.aborted &&
+          replayController.current === controller
+        ) {
+          setReplayStatus(
+            `Replay completed at ${speed.toFixed(1)}x.`
+          );
         }
       } catch (error) {
-        console.error("Replay failed:", error);
-
-        if (session === replaySession.current) {
-          setReplayStatus("Replay failed.");
+        // Ignore errors from an already cancelled session.
+        if (replayController.current === controller) {
+          if (controller.signal.aborted) {
+            setReplayStatus("Sequence stopped.");
+          } else {
+            console.error("Replay failed:", error);
+            synth.stopAll();
+            setReplayStatus("Replay failed.");
+          }
         }
       } finally {
-        if (session === replaySession.current) {
+        // A previous session must not reset a newer session.
+        if (replayController.current === controller) {
+          replayController.current = null;
           playingRef.current = false;
           setIsPlaying(false);
         }
@@ -151,9 +200,27 @@ export default function App() {
     [getSynth]
   );
 
-  // Existing FIFO voice stealing test.
+  // HW2-11: Stop pending tasks and active audio.
+  const stopSequence = useCallback(() => {
+    const controller = replayController.current;
+    if (!controller) return;
+
+    // Reject pending delay promises immediately.
+    controller.abort();
+
+    replayController.current = null;
+    playingRef.current = false;
+
+    // Smoothly release all active voices.
+    synthRef.current?.stopAll();
+
+    setIsPlaying(false);
+    setReplayStatus("Sequence stopped by user.");
+  }, []);
+
+  // HW2-06: Keep the FIFO voice-stealing test.
   const handleFifoTest = useCallback(() => {
-    if (playingRef.current) return;
+    if (playingRef.current || recordingRef.current) return;
 
     const synth = getSynth();
     synth.stopAll();
@@ -171,8 +238,8 @@ export default function App() {
     const passed =
       active.length === 8 &&
       active.every(
-        (freq, index) =>
-          Math.abs(freq - expected[index]) < 0.001
+        (frequency, index) =>
+          Math.abs(frequency - expected[index]) < 0.001
       );
 
     setTestResult(
@@ -180,12 +247,20 @@ export default function App() {
         ? "PASS: 8 voices, oldest C4 removed."
         : "FAIL: FIFO voice stealing."
     );
+
+    console.log("FIFO test:", {
+      activeVoiceCount: synth.getActiveVoiceCount(),
+      activeFrequencies: active,
+      passed,
+    });
   }, [getSynth]);
 
+  // HW2-11: Cleanup when the component unmounts.
   useEffect(() => {
     return () => {
-      // Prevent pending replay from playing more notes.
-      replaySession.current++;
+      replayController.current?.abort();
+      replayController.current = null;
+
       playingRef.current = false;
       recordingRef.current = false;
 
@@ -200,6 +275,7 @@ export default function App() {
         <p className="piano-eyebrow">
           LAB 03 / HOMEWORK 02
         </p>
+
         <h1>Polyphonic Piano Studio</h1>
         <p>88-Key Digital Piano — A0 to C8</p>
       </header>
@@ -217,9 +293,10 @@ export default function App() {
       </section>
 
       <p className="piano-note">
-        Record a melody and replay it at different speeds.
+        Record your melody and replay it at different speeds.
       </p>
 
+      {/* Recording panel */}
       <section className="recording-panel">
         <h2>Melody Recorder</h2>
 
@@ -264,7 +341,7 @@ export default function App() {
           </ol>
         )}
 
-        {/* HW2-10: Variable speed replay */}
+        {/* Replay controls */}
         <div className="replay-panel">
           <h3>Replay Sequence</h3>
 
@@ -283,6 +360,16 @@ export default function App() {
                 Replay {speed.toFixed(1)}x
               </button>
             ))}
+
+            {/* HW2-11: Stop Sequence */}
+            <button
+              type="button"
+              className="stop-sequence"
+              disabled={!isPlaying}
+              onClick={stopSequence}
+            >
+              Stop Sequence
+            </button>
           </div>
 
           <output role="status" aria-live="polite">
@@ -291,19 +378,25 @@ export default function App() {
         </div>
       </section>
 
+      {/* FIFO test panel */}
       <section className="fifo-test">
         <h2>FIFO Voice Stealing Test</h2>
-        <p>Play 9 notes. The oldest note should be stolen.</p>
+
+        <p>
+          Play 9 notes. The oldest note should be stolen.
+        </p>
 
         <button
           type="button"
           onClick={handleFifoTest}
-          disabled={isPlaying}
+          disabled={isPlaying || isRecording}
         >
           Test 9-Note FIFO
         </button>
 
-        <output aria-live="polite">{testResult}</output>
+        <output aria-live="polite">
+          {testResult}
+        </output>
       </section>
     </main>
   );

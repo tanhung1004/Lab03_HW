@@ -331,3 +331,20 @@ body {
   color: #7dd3fc;
   margin-top: 16px;
 }
+
+
+/* HW2-11: Stop Sequence button */
+
+.replay-controls .stop-sequence {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.replay-controls .stop-sequence:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.replay-controls .stop-sequence:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
