@@ -9,7 +9,7 @@ optimistic claim handling, leaderboard and AI Failure Audit.
 
 - [x] HW3-01: Review Lab 02 timer, inventory and virtual list code.
 - [x] HW3-02: Define PUBG domain types and mock data.
-- [ ] HW3-03: Build responsive esports dashboard UI.
+- [x] HW3-03: Build responsive esports dashboard UI.
 - [ ] HW3-04: Implement usePubgAirdropTimer.
 - [ ] HW3-05: Handle visibilitychange and timer synchronization.
 - [ ] HW3-06: Implement optimistic crate/ticket claiming.
@@ -89,3 +89,17 @@ HW3-02 — Define PUBG domain types and mock data.
 ### Next Task
 HW3-03 — Build Responsive PUBG Arena Dashboard.
 
+## HW3-03 — Responsive Arena Dashboard
+
+### Implemented
+- PUBG Vietnam Arena hero section.
+- Crate and ticket cards using mock data.
+- Vietnamese currency formatting.
+- Squad leaderboard with computed total points.
+- Responsive desktop and mobile layout.
+- PUBG background image.
+
+### Deferred Features
+- Live countdown: HW3-04 / HW3-05
+- Claim and rollback: HW3-06 to HW3-08
+- Leaderboard sorting/filtering: HW3-10
