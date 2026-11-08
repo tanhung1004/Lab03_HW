@@ -1,2 +1,16 @@
-// TODO: Implement this module together when we reach its requirement.
-// This file is intentionally a placeholder; no feature logic is included.
+
+export type DrumKeyCode =
+  | "KeyW"
+  | "KeyA"
+  | "KeyS"
+  | "KeyD"
+  | "KeyJ"
+  | "KeyK"
+  | "KeyL";
+
+export interface DrumPadDefinition {
+  readonly id: string;
+  readonly name: string;
+  readonly keyLabel: string;
+  readonly keyCode: DrumKeyCode;
+}
