@@ -1,6 +1,7 @@
 
 import { mockCrates } from "./data/mockCrates";
 import { mockSquads } from "./data/mockSquads";
+import { usePubgAirdropTimer } from "./hooks/useAirdropTimer";
 import "./style.css";
 
 // Format Vietnamese currency.
@@ -8,10 +9,33 @@ const formatVnd = (amount: number): string => {
   return `${new Intl.NumberFormat("vi-VN").format(amount)} đ`;
 };
 
-// Format demo event date and time.
-const formatDate = (timestamp: number): string => {
-  return new Date(timestamp).toLocaleString("vi-VN");
-};
+// Display countdown for an individual crate.
+interface CrateCountdownProps {
+  targetEpochMs: number;
+}
+
+function CrateCountdown({
+  targetEpochMs,
+}: CrateCountdownProps) {
+  const { remainingMs, isLive } =
+    usePubgAirdropTimer(targetEpochMs);
+
+  const totalSeconds = Math.ceil(remainingMs / 1000);
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const timeText = [hours, minutes, seconds]
+    .map((value) => String(value).padStart(2, "0"))
+    .join(":");
+
+  return (
+    <strong className="crate-countdown">
+      {isLive ? "DROP TIME REACHED" : timeText}
+    </strong>
+  );
+}
 
 export default function App() {
   return (
@@ -37,7 +61,10 @@ export default function App() {
       </header>
 
       {/* Hero */}
-      <section className="hero" aria-labelledby="hero-title">
+      <section
+        className="hero"
+        aria-labelledby="hero-title"
+      >
         <div className="hero-content">
           <span className="section-tag">
             KRAFTON × PUBG VIETNAM
@@ -72,7 +99,7 @@ export default function App() {
         </div>
       </section>
 
-      {/* Crates and Tickets */}
+      {/* Airdrop and Ticket Cards */}
       <section
         className="arena-section"
         aria-labelledby="drops-title"
@@ -98,7 +125,10 @@ export default function App() {
               className="crate-card"
             >
               <div className="crate-top">
-                <span className="crate-icon" aria-hidden="true">
+                <span
+                  className="crate-icon"
+                  aria-hidden="true"
+                >
                   🎁
                 </span>
 
@@ -120,10 +150,11 @@ export default function App() {
                 </p>
 
                 <p>
-                  <span>Drop Time</span>
-                  <strong>
-                    {formatDate(crate.dropEpochMs)}
-                  </strong>
+                  <span>Drop Starts In</span>
+
+                  <CrateCountdown
+                    targetEpochMs={crate.dropEpochMs}
+                  />
                 </p>
               </div>
 
@@ -139,7 +170,7 @@ export default function App() {
         </div>
       </section>
 
-      {/* Vietnam Squad Leaderboard */}
+      {/* PUBG Vietnam Leaderboard */}
       <section
         className="arena-section"
         aria-labelledby="leaderboard-title"
@@ -204,8 +235,10 @@ export default function App() {
         </div>
       </section>
 
+      {/* Footer */}
       <footer className="arena-footer">
         Lab 03 — PUBG Vietnam Arena
+
         <p>
           Educational demo. Not official PUBG
           tournament data.

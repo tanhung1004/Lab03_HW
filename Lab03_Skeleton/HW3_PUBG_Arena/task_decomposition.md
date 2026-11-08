@@ -10,7 +10,7 @@ optimistic claim handling, leaderboard and AI Failure Audit.
 - [x] HW3-01: Review Lab 02 timer, inventory and virtual list code.
 - [x] HW3-02: Define PUBG domain types and mock data.
 - [x] HW3-03: Build responsive esports dashboard UI.
-- [ ] HW3-04: Implement usePubgAirdropTimer.
+- [x] HW3-04: Implement usePubgAirdropTimer.
 - [ ] HW3-05: Handle visibilitychange and timer synchronization.
 - [ ] HW3-06: Implement optimistic crate/ticket claiming.
 - [ ] HW3-07: Add duplicate-request prevention using claimId lock.
