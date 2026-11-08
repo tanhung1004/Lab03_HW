@@ -7,7 +7,7 @@ reusing accessibility and keyboard techniques from Lab 02.
 
 ## Tasks
 
-- [ ] HW1-01: Review Lab 02 HW1 and identify reusable code.
+- [x] HW1-01: Review Lab 02 HW1 and identify reusable code.
 - [ ] HW1-02: Initialize React components and drum pad data.
 - [ ] HW1-03: Build responsive Drum Kit UI.
 - [ ] HW1-04: Implement keyboard controls using event.code.
@@ -26,3 +26,52 @@ reusing accessibility and keyboard techniques from Lab 02.
 - Lighthouse results are recorded.
 - Bugs are documented and fixed.
 - Completed tasks have meaningful Git commits.
+
+
+
+## HW1-01 — Lab 02 Code Reuse Review
+
+**Status:** Completed
+
+### Reusable Components and Patterns
+
+1. React Project Structure
+   - Source: Lab02/HW1/src/main.tsx
+   - Reuse the React 19 + TypeScript + Vite setup.
+
+2. Keyboard Accessibility
+   - Source: Lab02/HW1/src/components/DataGrid.tsx
+   - Reuse keyboard event handling patterns.
+   - Adapt them to physical key codes: W/A/S/D/J/K/L.
+
+3. Focus Management
+   - Source: Lab02/HW1/src/components/DataGrid.tsx
+   - Reuse focus management principles.
+   - Drum pads will use native buttons.
+
+4. Accessibility Styling
+   - Source: Lab02/HW1/src/style.css
+   - Reuse focus-visible, responsive and
+     reduced-motion techniques.
+
+5. Semantic HTML and ARIA
+   - Source: Lab02/HW1/src/App.tsx
+   - Reuse semantic structure and ARIA principles.
+
+### What Must Be Implemented in Lab 03
+
+- DrumPad component.
+- useDrumKeyboard hook using event.code.
+- Anti-repeat keyboard guard.
+- Input focus isolation.
+- Drum audio engine.
+- Visual hit history.
+- Decibel meter.
+
+### Conclusion
+
+Lab 03 HW1 inherits accessibility techniques
+from Lab 02 HW1 without copying the DataGrid
+business logic.
+
+Next Task: HW1-02 — Initialize drum pad structure.
