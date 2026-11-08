@@ -7,7 +7,7 @@ optimistic claim handling, leaderboard and AI Failure Audit.
 
 ## Tasks
 
-- [ ] HW3-01: Review Lab 02 timer, inventory and virtual list code.
+- [x] HW3-01: Review Lab 02 timer, inventory and virtual list code.
 - [ ] HW3-02: Define PUBG domain types and mock data.
 - [ ] HW3-03: Build responsive esports dashboard UI.
 - [ ] HW3-04: Implement usePubgAirdropTimer.
@@ -28,3 +28,37 @@ optimistic claim handling, leaderboard and AI Failure Audit.
 - Leaderboard filtering and sorting work.
 - AI_FAILURE_AUDIT.md contains at least 3 real findings.
 - Tests pass and each completed task is committed.
+
+
+## HW3-01 — Lab 02 Code Reuse Review
+
+### Goal
+Reuse existing Lab 02 logic to develop
+the PUBG Vietnam Arena.
+
+### Reusable Modules
+
+1. Anti-Drift Timer
+   - Source: Lab 02 HW3
+   - Reuse timestamp-based countdown logic.
+   - Adapt to usePubgAirdropTimer.
+   - Add visibilitychange synchronization.
+
+2. Inventory State Machine
+   - Source: Lab 02 HW3
+   - Reuse optimistic inventory updates.
+   - Adapt to PUBG ticket and crate claiming.
+   - Handle HTTP 409 conflict rollback.
+
+3. Virtual Scroller
+   - Reference: Lab 02 Slide 22
+   - Apply to leaderboard or kill feed if needed.
+   - Verify original implementation before reuse.
+
+4. AI Failure Audit
+   - Reuse Lab 02 documentation approach.
+   - Record at least 3 verified AI-generated bugs.
+   - Include reproduction, root cause and fixes.
+
+### Next Task
+HW3-02 — Define PUBG domain types and mock data.
