@@ -11,7 +11,7 @@ React.memo optimization and asynchronous melody playback.
 - [x] HW2-02: Define MIDI note and piano key data models.
 - [x] HW2-03: Generate 88 piano keys algorithmically (A0–C8).
 - [x] HW2-04: Build responsive piano keyboard UI.
-- [ ] HW2-05: Implement the Web Audio PolyphonicSynth.
+- [x] HW2-05: Implement the Web Audio PolyphonicSynth.
 - [ ] HW2-06: Implement 8-voice polyphony and FIFO voice stealing.
 - [ ] HW2-07: Add ADSR-style gain ramp and audio cleanup.
 - [ ] HW2-08: Optimize PianoKey using React.memo.
