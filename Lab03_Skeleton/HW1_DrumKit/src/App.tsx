@@ -4,19 +4,26 @@ import { drumPads } from "./data/drumPads";
 
 export default function App() {
   return (
-    <main className="starter-page">
-      <h1>HW1 - Production Studio Drum Kit</h1>
-      <p>Lab 03 - Drum Pad Structure</p>
+    <main className="drum-studio">
+      <header className="drum-header">
+        <p className="drum-label">LAB 03 / HOMEWORK 01</p>
+        <h1>Production Studio</h1>
+        <p>Interactive Drum Kit</p>
+      </header>
 
-      <h2>{drumPads.length} Drum Pads</h2>
+      <section aria-labelledby="drum-title">
+        <h2 id="drum-title">{drumPads.length} Drum Pads</h2>
 
-      <ul>
-        {drumPads.map((pad) => (
-          <DrumPad key={pad.id} pad={pad} />
-        ))}
-      </ul>
+        <ul className="drum-grid">
+          {drumPads.map((pad) => (
+            <DrumPad key={pad.id} pad={pad} />
+          ))}
+        </ul>
+      </section>
 
-      <p>Audio and keyboard controls: coming in later tasks.</p>
+      <p className="drum-note">
+        Audio and keyboard controls coming soon.
+      </p>
     </main>
   );
 }

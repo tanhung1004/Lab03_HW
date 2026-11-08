@@ -7,10 +7,10 @@ interface DrumPadProps {
 
 export default function DrumPad({ pad }: DrumPadProps) {
   return (
-    <li>
-      <strong>{pad.name}</strong>
-      {" — "}
-      <kbd>{pad.keyLabel}</kbd>
+    <li className="drum-card">
+      <kbd className="drum-key">{pad.keyLabel}</kbd>
+      <strong className="drum-name">{pad.name}</strong>
+      <small className="drum-code">{pad.keyCode}</small>
     </li>
   );
 }
