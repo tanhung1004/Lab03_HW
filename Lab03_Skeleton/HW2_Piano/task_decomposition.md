@@ -7,7 +7,7 @@ React.memo optimization and asynchronous melody playback.
 
 ## Tasks
 
-- [ ] HW2-01: Review Lab 02 AudioTaskQueue and React.memo examples.
+- [x] HW2-01: Review Lab 02 AudioTaskQueue and React.memo examples.
 - [ ] HW2-02: Define MIDI note and piano key data models.
 - [ ] HW2-03: Generate 88 piano keys algorithmically (A0–C8).
 - [ ] HW2-04: Build responsive piano keyboard UI.
@@ -28,3 +28,54 @@ React.memo optimization and asynchronous melody playback.
 - Stop cancels playback and cleans up active voices.
 - Bugs and fixes are documented.
 - Each completed task has a Git commit.
+
+
+## HW2-01 — Lab 02 Code Reuse Analysis
+
+**Status:** Completed
+
+### 1. FIFO Queue Controller
+Source: Lab02/HW2/src/audio-queue-controller.ts
+
+Reusable:
+- FIFO processing order.
+- Queue management.
+- Async/await and Promise handling.
+- AbortController cancellation.
+- Resource cleanup.
+
+Adaptation:
+- Replace audio download tasks with MIDI note events.
+- Support asynchronous sequence replay.
+- Manage cancellation on Stop/Unmount.
+
+### 2. Web Audio Engine
+Source: Lab02/HW2/src/audio-engine.ts
+
+Reusable:
+- AudioContext lifecycle management.
+- Audio node connection and cleanup.
+- Start/Stop principles.
+
+Adaptation:
+- Use OscillatorNode instead of AudioBufferSourceNode.
+- Support up to 8 simultaneous voices.
+- Implement FIFO voice stealing.
+
+### 3. React.memo
+Source: Lab02 Slide 21
+
+Reusable:
+- Component memoization principles.
+
+Adaptation:
+- Create 88 memoized PianoKey components.
+- Prevent unrelated keys from re-rendering.
+- Verify with React DevTools Profiler.
+
+### Conclusion
+Lab03 HW2 reuses Lab02 queue and audio lifecycle
+principles, while implementing a new polyphonic
+piano engine and MIDI-based sequencer.
+
+Next: HW2-02 — Define MIDI Note Data Models.
