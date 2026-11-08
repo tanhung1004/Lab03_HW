@@ -1,7 +1,11 @@
 
+import { useCallback, useRef, useState } from "react";
+
 import { mockCrates } from "./data/mockCrates";
 import { mockSquads } from "./data/mockSquads";
+
 import { useAirdropTimer } from "./hooks/useAirdropTimer";
+
 import {
   DROP_LIVE_DURATION_MS,
   getDropPhase,
@@ -16,16 +20,24 @@ import type {
 import "./style.css";
 
 /**
- * HW3-06 — PUBG Vietnam Arena
- * Adds a four-state Airdrop Phase State Machine.
+ * HW3-07 — Optimistic Claim & Inventory Update
+ *
+ * - Claim only during AIRDROP_LIVE.
+ * - Decrease stock immediately.
+ * - Simulate asynchronous confirmation.
+ * - Block duplicate requests while pending.
+ * - Keep separate inventory for each crate.
+ *
+ * HTTP 409 simulation and conflict handling
+ * will be added in HW3-08.
  */
 
-// Vietnamese currency formatter.
+// Format Vietnamese currency.
 function formatVnd(amount: number): string {
   return `${new Intl.NumberFormat("vi-VN").format(amount)} đ`;
 }
 
-// Display milliseconds as HH:MM:SS.
+// Format milliseconds as HH:MM:SS.
 function formatCountdown(milliseconds: number): string {
   const totalSeconds = Math.ceil(
     Math.max(0, milliseconds) / 1000
@@ -42,7 +54,6 @@ function formatCountdown(milliseconds: number): string {
     .join(":");
 }
 
-// Phase-specific colors.
 const phaseColors: Record<DropPhase, string> = {
   WARMUP: "#fbbf24",
   AIRDROP_LIVE: "#34d399",
@@ -50,16 +61,31 @@ const phaseColors: Record<DropPhase, string> = {
   EXPIRED: "#94a3b8",
 };
 
-interface CrateCardProps {
-  crate: PubgCrateDrop;
+// Simulate a successful server response after 800ms.
+// This is NOT a real API request.
+function simulateClaimRequest(): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, 800);
+  });
 }
 
-function CrateCard({ crate }: CrateCardProps) {
-  const { remainingMs, nowMs } = useAirdropTimer(
-    crate.dropEpochMs
-  );
+interface CrateCardProps {
+  crate: PubgCrateDrop;
+  isPending: boolean;
+  feedback: string;
+  onClaim: (crateId: string) => void;
+}
 
-  // HW3-06: Derive phase from time and stock.
+function CrateCard({
+  crate,
+  isPending,
+  feedback,
+  onClaim,
+}: CrateCardProps) {
+  const { remainingMs, nowMs } =
+    useAirdropTimer(crate.dropEpochMs);
+
+  // Derive current phase using local inventory.
   const phase = getDropPhase(crate, nowMs);
   const phaseLabel = getPhaseLabel(phase);
 
@@ -71,37 +97,55 @@ function CrateCard({ crate }: CrateCardProps) {
     closesAt - nowMs
   );
 
-  // Determine what the card should display.
   let timerTitle = "Drop Status";
   let timerText = "";
-  let claimText = "Claim — Unavailable";
 
   switch (phase) {
     case "WARMUP":
       timerTitle = "Drop Starts In";
       timerText = formatCountdown(remainingMs);
-      claimText = "Claim — Opens Soon";
       break;
 
     case "AIRDROP_LIVE":
       timerTitle = "Drop Ends In";
       timerText = formatCountdown(liveRemainingMs);
-
-      // Claim functionality is not implemented yet.
-      claimText = "Claim — Coming in HW3-07";
       break;
 
     case "LOOTED_OUT":
-      timerTitle = "Drop Status";
       timerText = "All Rewards Claimed";
-      claimText = "Sold Out";
       break;
 
     case "EXPIRED":
-      timerTitle = "Drop Status";
       timerText = "Event Window Closed";
-      claimText = "Drop Expired";
       break;
+  }
+
+  // A claim is valid only while the drop is live.
+  const canClaim =
+    phase === "AIRDROP_LIVE" && !isPending;
+
+  let claimText = "Claim — Unavailable";
+
+  if (isPending) {
+    claimText = "Processing Claim...";
+  } else {
+    switch (phase) {
+      case "WARMUP":
+        claimText = "Claim — Opens Soon";
+        break;
+
+      case "AIRDROP_LIVE":
+        claimText = "Claim Reward";
+        break;
+
+      case "LOOTED_OUT":
+        claimText = "Sold Out";
+        break;
+
+      case "EXPIRED":
+        claimText = "Drop Expired";
+        break;
+    }
   }
 
   return (
@@ -136,7 +180,6 @@ function CrateCard({ crate }: CrateCardProps) {
 
         <p>
           <span>{timerTitle}</span>
-
           <strong
             className="crate-countdown"
             style={{ color: phaseColors[phase] }}
@@ -148,19 +191,151 @@ function CrateCard({ crate }: CrateCardProps) {
         </p>
       </div>
 
-      {/* Claim logic belongs to a later task. */}
+      {/* Optimistic Claim */}
       <button
         type="button"
         className="claim-button"
-        disabled
+        disabled={!canClaim}
+        onClick={() => onClaim(crate.id)}
+        style={{
+          backgroundColor: canClaim
+            ? "#fbbf24"
+            : "#475569",
+          color: canClaim ? "#0f172a" : "#e2e8f0",
+          cursor: canClaim ? "pointer" : "not-allowed",
+          opacity: isPending ? 0.7 : 1,
+          fontWeight: 700,
+        }}
       >
         {claimText}
       </button>
+
+      {/* Claim result */}
+      {feedback && (
+        <p
+          role="status"
+          aria-live="polite"
+          style={{
+            marginTop: 12,
+            fontSize: 13,
+            color: "#86efac",
+          }}
+        >
+          {feedback}
+        </p>
+      )}
     </article>
   );
 }
 
 export default function App() {
+  /**
+   * Store a local copy of inventory.
+   * Do not mutate imported mockCrates directly.
+   */
+  const [crates, setCrates] = useState<PubgCrateDrop[]>(
+    () => mockCrates.map((crate) => ({ ...crate }))
+  );
+
+  // Track pending requests for button rendering.
+  const [pendingIds, setPendingIds] = useState<Set<string>>(
+    () => new Set()
+  );
+
+  // Store per-crate feedback messages.
+  const [feedbackById, setFeedbackById] = useState<
+    Record<string, string>
+  >({});
+
+  /**
+   * Synchronous lock:
+   * prevents repeated clicks before React rerenders.
+   */
+  const inFlightIds = useRef<Set<string>>(new Set());
+
+  // Handle optimistic claim.
+  const handleClaim = useCallback(
+    async (crateId: string) => {
+      // Prevent duplicate in-flight requests.
+      if (inFlightIds.current.has(crateId)) {
+        return;
+      }
+
+      const currentCrate = crates.find(
+        (crate) => crate.id === crateId
+      );
+
+      // Reject nonexistent crates.
+      if (!currentCrate) {
+        return;
+      }
+
+      // Recheck real time and inventory at click time.
+      const currentPhase = getDropPhase(
+        currentCrate,
+        Date.now()
+      );
+
+      if (currentPhase !== "AIRDROP_LIVE") {
+        return;
+      }
+
+      if (currentCrate.remainingStock <= 0) {
+        return;
+      }
+
+      // Lock synchronously BEFORE updating React state.
+      inFlightIds.current.add(crateId);
+
+      setPendingIds((previous) => {
+        const next = new Set(previous);
+        next.add(crateId);
+        return next;
+      });
+
+      setFeedbackById((previous) => ({
+        ...previous,
+        [crateId]: "Sending claim request...",
+      }));
+
+      /**
+       * Optimistic inventory update:
+       * decrease stock immediately, without waiting.
+       */
+      setCrates((previous) =>
+        previous.map((crate) =>
+          crate.id === crateId
+            ? {
+                ...crate,
+                remainingStock:
+                  Math.max(0, crate.remainingStock - 1),
+              }
+            : crate
+        )
+      );
+
+      try {
+        // Simulate a successful asynchronous response.
+        await simulateClaimRequest();
+
+        setFeedbackById((previous) => ({
+          ...previous,
+          [crateId]: "Claim confirmed! (Demo)",
+        }));
+      } finally {
+        // Always release the in-flight lock.
+        inFlightIds.current.delete(crateId);
+
+        setPendingIds((previous) => {
+          const next = new Set(previous);
+          next.delete(crateId);
+          return next;
+        });
+      }
+    },
+    [crates]
+  );
+
   return (
     <main className="arena">
       {/* Header */}
@@ -206,7 +381,7 @@ export default function App() {
 
           <div className="hero-stats">
             <div>
-              <strong>{mockCrates.length}</strong>
+              <strong>{crates.length}</strong>
               <span>Event Rewards</span>
             </div>
 
@@ -242,10 +417,15 @@ export default function App() {
         </div>
 
         <div className="crates-grid">
-          {mockCrates.map((crate) => (
+          {crates.map((crate) => (
             <CrateCard
               key={crate.id}
               crate={crate}
+              isPending={pendingIds.has(crate.id)}
+              feedback={feedbackById[crate.id] ?? ""}
+              onClaim={(id) => {
+                void handleClaim(id);
+              }}
             />
           ))}
         </div>

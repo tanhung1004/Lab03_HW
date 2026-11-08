@@ -13,7 +13,7 @@ optimistic claim handling, leaderboard and AI Failure Audit.
 - [x] HW3-04: Implement usePubgAirdropTimer.
 - [x] HW3-05: Handle visibilitychange and timer synchronization.
 - [x] HW3-06: Implement optimistic crate/ticket claiming.
-- [ ] HW3-07: Add duplicate-request prevention using claimId lock.
+- [x] HW3-07: Add duplicate-request prevention using claimId lock.
 - [ ] HW3-08: Implement rollback when the server returns HTTP 409.
 - [ ] HW3-09: Build PUBG Vietnam leaderboard.
 - [ ] HW3-10: Implement leaderboard sorting, filtering and kill feed.
@@ -131,3 +131,35 @@ HW3-03 — Build Responsive PUBG Arena Dashboard.
 
 ### Next Task
 HW3-07 — Optimistic Claim & Inventory Update.
+
+
+## HW3-07 — Optimistic Claim & Inventory Update
+
+### Implementation
+- Enabled Claim button during AIRDROP_LIVE.
+- Used React state for local inventory.
+- Decreased stock immediately after clicking Claim.
+- Simulated asynchronous confirmation (800ms).
+- Added an in-flight Set to block duplicate requests.
+- Disabled Claim while the request is pending.
+- Preserved separate inventory for each crate.
+- Prevented stock from becoming negative.
+
+### Verification
+- LIVE claim is enabled: PASS
+- Immediate inventory update: PASS
+- Duplicate in-flight request blocked: PASS
+- Pending state displayed: PASS
+- Other crate inventory unchanged: PASS
+- Production build: PASS
+
+### Known Limitations
+- Claim confirmation is currently simulated.
+- Stock is only maintained in browser memory.
+- Reloading resets mock inventory.
+- No cross-user inventory synchronization.
+- No simulated HTTP 409 conflict yet.
+- No per-user claim limit yet.
+
+### Next Task
+HW3-08 — HTTP 409 Conflict & Optimistic Rollback.
