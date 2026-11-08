@@ -8,7 +8,7 @@ React.memo optimization and asynchronous melody playback.
 ## Tasks
 
 - [x] HW2-01: Review Lab 02 AudioTaskQueue and React.memo examples.
-- [ ] HW2-02: Define MIDI note and piano key data models.
+- [x] HW2-02: Define MIDI note and piano key data models.
 - [ ] HW2-03: Generate 88 piano keys algorithmically (A0–C8).
 - [ ] HW2-04: Build responsive piano keyboard UI.
 - [ ] HW2-05: Implement the Web Audio PolyphonicSynth.
@@ -79,3 +79,23 @@ principles, while implementing a new polyphonic
 piano engine and MIDI-based sequencer.
 
 Next: HW2-02 — Define MIDI Note Data Models.
+
+
+## HW2-02 — MIDI Data Models
+
+**Status:** Completed
+
+### Implementation
+- Defined PianoKeyData interface.
+- Defined RecordedNote interface.
+- Defined standard MIDI range (21–108).
+- Added note name constants.
+- Implemented MIDI-to-frequency calculation.
+
+### Validation
+- TypeScript build: PASS
+- MIDI A4 reference frequency: 440 Hz
+- Expected piano range: 88 keys
+
+### Next Task
+HW2-03 — Generate and display 88 piano keys.
