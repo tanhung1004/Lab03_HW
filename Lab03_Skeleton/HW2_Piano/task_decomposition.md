@@ -16,7 +16,7 @@ React.memo optimization and asynchronous melody playback.
 - [x] HW2-07: Add ADSR-style gain ramp and audio cleanup.
 - [x] HW2-08: Optimize PianoKey using React.memo.
 - [x] HW2-09: Implement note recording and FIFO sequence storage.
-- [ ] HW2-10: Implement replay at 0.5x, 1x and 2x speeds.
+- [x] HW2-10: Implement replay at 0.5x, 1x and 2x speeds.
 - [ ] HW2-11: Implement AbortController cancellation and test.
 
 ## Definition of Done
@@ -168,3 +168,27 @@ HW2-08 — Optimize PianoKey using React.memo.
 ### Next Task
 HW2-09 — Implement note recording and FIFO sequence storage.
 
+
+## HW2-10 — Variable-Speed FIFO Replay
+
+### Implementation
+- Reused recorded FIFO note sequence.
+- Implemented asynchronous playback using async/await.
+- Supported 0.5x, 1.0x and 2.0x replay speeds.
+- Adjusted note intervals and playback durations.
+- Prevented overlapping replay sessions.
+- Preserved existing FIFO voice stealing test.
+
+### Verification
+- 0.5x replay: PASS
+- 1.0x replay: PASS
+- 2.0x replay: PASS
+- FIFO order preserved: PASS
+- Production build: PASS
+
+### Known Limitation
+- Recorded note duration is currently fixed at 1500ms.
+- Immediate replay cancellation will be added in HW2-11.
+
+### Next Task
+HW2-11 — AbortController cancellation and final testing.

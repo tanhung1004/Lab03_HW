@@ -289,3 +289,45 @@ body {
   color: #cbd5e1;
   overflow-wrap: anywhere;
 }
+
+
+/* HW2-10: Variable-speed replay */
+
+.replay-panel {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #475569;
+}
+
+.replay-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.replay-controls button {
+  padding: 12px 18px;
+  border: none;
+  border-radius: 8px;
+  background: #38bdf8;
+  color: #082f49;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.replay-controls button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.replay-controls button:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 3px;
+}
+
+.replay-panel output {
+  display: block;
+  color: #7dd3fc;
+  margin-top: 16px;
+}
