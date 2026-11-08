@@ -179,3 +179,41 @@ body {
   outline: 3px solid #34d399;
   outline-offset: 2px;
 }
+
+
+/* HW1-07: Accessible drum buttons */
+
+.drum-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.drum-button {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+
+  width: 100%;
+  min-height: 160px;
+  padding: 16px;
+
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.drum-button:focus-visible {
+  outline: 3px solid #34d399;
+  outline-offset: -5px;
+}
+
+@media (max-width: 480px) {
+  .drum-button {
+    min-height: 125px;
+    padding: 12px;
+  }
+}

@@ -12,8 +12,8 @@ reusing accessibility and keyboard techniques from Lab 02.
 - [x] HW1-03: Build responsive Drum Kit UI.
 - [x] HW1-04: Implement keyboard controls using event.code.
 - [x] HW1-05: Prevent key-repeat and ignore typing in input fields.
-- [ ] HW1-06: Implement drum sounds using Web Audio API.
-- [ ] HW1-07: Add accessible buttons and focus management.
+- [x] HW1-06: Implement drum sounds using Web Audio API.
+- [x] HW1-07: Add accessible buttons and focus management.
 - [ ] HW1-08: Implement visual hit history and decibel meter.
 - [ ] HW1-09: Test keyboard, audio, accessibility and responsive UI.
 - [ ] HW1-10: Run Lighthouse audit, fix issues and document results.

@@ -79,6 +79,7 @@ export default function App() {
               key={pad.id}
               pad={pad}
               isPressed={pressedPads.has(pad.id)}
+              onPadChange={handlePadChange}
             />
           ))}
         </ul>
