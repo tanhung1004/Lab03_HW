@@ -12,6 +12,11 @@ import {
   getPhaseLabel,
 } from "./services/dropPhase";
 
+import {
+  MockHttpError,
+  requestClaim,
+} from "./services/claimService";
+
 import type {
   DropPhase,
   PubgCrateDrop,
@@ -20,24 +25,24 @@ import type {
 import "./style.css";
 
 /**
- * HW3-07 — Optimistic Claim & Inventory Update
+ * HW3-08 — Optimistic Claim & Conflict Rollback
  *
- * - Claim only during AIRDROP_LIVE.
- * - Decrease stock immediately.
- * - Simulate asynchronous confirmation.
- * - Block duplicate requests while pending.
- * - Keep separate inventory for each crate.
- *
- * HTTP 409 simulation and conflict handling
- * will be added in HW3-08.
+ * - Update inventory immediately on Claim.
+ * - Simulate successful/failed API requests.
+ * - Handle mock HTTP 409 Conflict.
+ * - Roll back optimistic inventory.
+ * - Prevent duplicate in-flight requests.
  */
 
-// Format Vietnamese currency.
+type ClaimFeedback = {
+  message: string;
+  tone: "success" | "error" | "info";
+};
+
 function formatVnd(amount: number): string {
   return `${new Intl.NumberFormat("vi-VN").format(amount)} đ`;
 }
 
-// Format milliseconds as HH:MM:SS.
 function formatCountdown(milliseconds: number): string {
   const totalSeconds = Math.ceil(
     Math.max(0, milliseconds) / 1000
@@ -61,31 +66,29 @@ const phaseColors: Record<DropPhase, string> = {
   EXPIRED: "#94a3b8",
 };
 
-// Simulate a successful server response after 800ms.
-// This is NOT a real API request.
-function simulateClaimRequest(): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, 800);
-  });
-}
-
 interface CrateCardProps {
   crate: PubgCrateDrop;
   isPending: boolean;
-  feedback: string;
+  simulateConflict: boolean;
+  feedback?: ClaimFeedback;
   onClaim: (crateId: string) => void;
+  onToggleConflict: (
+    crateId: string,
+    enabled: boolean
+  ) => void;
 }
 
 function CrateCard({
   crate,
   isPending,
+  simulateConflict,
   feedback,
   onClaim,
+  onToggleConflict,
 }: CrateCardProps) {
   const { remainingMs, nowMs } =
     useAirdropTimer(crate.dropEpochMs);
 
-  // Derive current phase using local inventory.
   const phase = getDropPhase(crate, nowMs);
   const phaseLabel = getPhaseLabel(phase);
 
@@ -99,54 +102,45 @@ function CrateCard({
 
   let timerTitle = "Drop Status";
   let timerText = "";
+  let claimText = "Claim — Unavailable";
 
   switch (phase) {
     case "WARMUP":
       timerTitle = "Drop Starts In";
       timerText = formatCountdown(remainingMs);
+      claimText = "Claim — Opens Soon";
       break;
 
     case "AIRDROP_LIVE":
       timerTitle = "Drop Ends In";
       timerText = formatCountdown(liveRemainingMs);
+      claimText = "Claim Reward";
       break;
 
     case "LOOTED_OUT":
       timerText = "All Rewards Claimed";
+      claimText = "Sold Out";
       break;
 
     case "EXPIRED":
       timerText = "Event Window Closed";
+      claimText = "Drop Expired";
       break;
   }
 
-  // A claim is valid only while the drop is live.
+  if (isPending) {
+    claimText = "Processing Claim...";
+  }
+
   const canClaim =
     phase === "AIRDROP_LIVE" && !isPending;
 
-  let claimText = "Claim — Unavailable";
-
-  if (isPending) {
-    claimText = "Processing Claim...";
-  } else {
-    switch (phase) {
-      case "WARMUP":
-        claimText = "Claim — Opens Soon";
-        break;
-
-      case "AIRDROP_LIVE":
-        claimText = "Claim Reward";
-        break;
-
-      case "LOOTED_OUT":
-        claimText = "Sold Out";
-        break;
-
-      case "EXPIRED":
-        claimText = "Drop Expired";
-        break;
-    }
-  }
+  const feedbackColor =
+    feedback?.tone === "error"
+      ? "#fda4af"
+      : feedback?.tone === "success"
+        ? "#86efac"
+        : "#93c5fd";
 
   return (
     <article className="crate-card">
@@ -180,6 +174,7 @@ function CrateCard({
 
         <p>
           <span>{timerTitle}</span>
+
           <strong
             className="crate-countdown"
             style={{ color: phaseColors[phase] }}
@@ -191,7 +186,7 @@ function CrateCard({
         </p>
       </div>
 
-      {/* Optimistic Claim */}
+      {/* Claim button */}
       <button
         type="button"
         className="claim-button"
@@ -203,25 +198,55 @@ function CrateCard({
             : "#475569",
           color: canClaim ? "#0f172a" : "#e2e8f0",
           cursor: canClaim ? "pointer" : "not-allowed",
-          opacity: isPending ? 0.7 : 1,
           fontWeight: 700,
         }}
       >
         {claimText}
       </button>
 
-      {/* Claim result */}
+      {/* Force a 409 response to test rollback */}
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginTop: 14,
+          fontSize: 13,
+          color: "#cbd5e1",
+          cursor: isPending ? "not-allowed" : "pointer",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={simulateConflict}
+          disabled={isPending}
+          onChange={(event) =>
+            onToggleConflict(
+              crate.id,
+              event.target.checked
+            )
+          }
+        />
+
+        Simulate HTTP 409 (Demo)
+      </label>
+
+      {/* Result message */}
       {feedback && (
         <p
-          role="status"
-          aria-live="polite"
+          role={
+            feedback.tone === "error"
+              ? "alert"
+              : "status"
+          }
           style={{
-            marginTop: 12,
+            color: feedbackColor,
             fontSize: 13,
-            color: "#86efac",
+            lineHeight: 1.5,
+            marginTop: 12,
           }}
         >
-          {feedback}
+          {feedback.message}
         </p>
       )}
     </article>
@@ -229,34 +254,53 @@ function CrateCard({
 }
 
 export default function App() {
-  /**
-   * Store a local copy of inventory.
-   * Do not mutate imported mockCrates directly.
-   */
+  // Local optimistic inventory.
   const [crates, setCrates] = useState<PubgCrateDrop[]>(
     () => mockCrates.map((crate) => ({ ...crate }))
   );
 
-  // Track pending requests for button rendering.
+  // Pending requests, one per crate.
   const [pendingIds, setPendingIds] = useState<Set<string>>(
     () => new Set()
   );
 
-  // Store per-crate feedback messages.
+  // Conflict testing switch, one per crate.
+  const [conflictIds, setConflictIds] = useState<Set<string>>(
+    () => new Set()
+  );
+
+  // Claim status messages.
   const [feedbackById, setFeedbackById] = useState<
-    Record<string, string>
+    Record<string, ClaimFeedback>
   >({});
 
-  /**
-   * Synchronous lock:
-   * prevents repeated clicks before React rerenders.
-   */
+  // Synchronous in-flight locking.
   const inFlightIds = useRef<Set<string>>(new Set());
 
-  // Handle optimistic claim.
+  // Enable or disable forced 409 for a crate.
+  const handleToggleConflict = useCallback(
+    (crateId: string, enabled: boolean) => {
+      setConflictIds((previous) => {
+        const next = new Set(previous);
+
+        if (enabled) {
+          next.add(crateId);
+        } else {
+          next.delete(crateId);
+        }
+
+        return next;
+      });
+    },
+    []
+  );
+
+  /**
+   * HW3-08: Optimistic claim with rollback.
+   */
   const handleClaim = useCallback(
     async (crateId: string) => {
-      // Prevent duplicate in-flight requests.
+      // Block repeated clicks before React rerenders.
       if (inFlightIds.current.has(crateId)) {
         return;
       }
@@ -265,26 +309,25 @@ export default function App() {
         (crate) => crate.id === crateId
       );
 
-      // Reject nonexistent crates.
-      if (!currentCrate) {
-        return;
-      }
+      if (!currentCrate) return;
 
-      // Recheck real time and inventory at click time.
-      const currentPhase = getDropPhase(
+      // Validate current client time and stock.
+      const phase = getDropPhase(
         currentCrate,
         Date.now()
       );
 
-      if (currentPhase !== "AIRDROP_LIVE") {
+      if (
+        phase !== "AIRDROP_LIVE" ||
+        currentCrate.remainingStock <= 0
+      ) {
         return;
       }
 
-      if (currentCrate.remainingStock <= 0) {
-        return;
-      }
+      const shouldSimulate409 =
+        conflictIds.has(crateId);
 
-      // Lock synchronously BEFORE updating React state.
+      // Lock synchronously.
       inFlightIds.current.add(crateId);
 
       setPendingIds((previous) => {
@@ -295,12 +338,15 @@ export default function App() {
 
       setFeedbackById((previous) => ({
         ...previous,
-        [crateId]: "Sending claim request...",
+        [crateId]: {
+          message: "Sending claim request...",
+          tone: "info",
+        },
       }));
 
       /**
-       * Optimistic inventory update:
-       * decrease stock immediately, without waiting.
+       * Optimistic update:
+       * inventory decreases before server response.
        */
       setCrates((previous) =>
         previous.map((crate) =>
@@ -315,15 +361,104 @@ export default function App() {
       );
 
       try {
-        // Simulate a successful asynchronous response.
-        await simulateClaimRequest();
+        // Simulated server request.
+        const result = await requestClaim(
+          crateId,
+          shouldSimulate409
+        );
+
+        /**
+         * Success:
+         * synchronize local inventory with
+         * the mock server's authoritative stock.
+         */
+        setCrates((previous) =>
+          previous.map((crate) =>
+            crate.id === crateId
+              ? {
+                  ...crate,
+                  remainingStock: result.remainingStock,
+                }
+              : crate
+          )
+        );
 
         setFeedbackById((previous) => ({
           ...previous,
-          [crateId]: "Claim confirmed! (Demo)",
+          [crateId]: {
+            message:
+              "Claim confirmed! Inventory updated.",
+            tone: "success",
+          },
         }));
+      } catch (error) {
+        if (error instanceof MockHttpError) {
+          /**
+           * HTTP 409 rollback:
+           * restore authoritative server inventory.
+           *
+           * If stock really sold out, server stock may
+           * be 0 rather than the old optimistic value.
+           */
+          setCrates((previous) =>
+            previous.map((crate) =>
+              crate.id === crateId
+                ? {
+                    ...crate,
+                    remainingStock:
+                      error.remainingStock,
+                  }
+                : crate
+            )
+          );
+
+          setFeedbackById((previous) => ({
+            ...previous,
+            [crateId]: {
+              message:
+                `HTTP ${error.status} Conflict — ` +
+                `claim rejected. Inventory synchronized.`,
+              tone: "error",
+            },
+          }));
+
+          console.warn(
+            "Mock claim conflict:",
+            error.message
+          );
+        } else {
+          /**
+           * Unexpected failure:
+           * revert this request's optimistic decrement.
+           */
+          setCrates((previous) =>
+            previous.map((crate) =>
+              crate.id === crateId
+                ? {
+                    ...crate,
+                    remainingStock:
+                      crate.remainingStock + 1,
+                  }
+                : crate
+            )
+          );
+
+          setFeedbackById((previous) => ({
+            ...previous,
+            [crateId]: {
+              message:
+                "Claim failed. Optimistic stock reverted.",
+              tone: "error",
+            },
+          }));
+
+          console.error(
+            "Unexpected claim error:",
+            error
+          );
+        }
       } finally {
-        // Always release the in-flight lock.
+        // Always release the request lock.
         inFlightIds.current.delete(crateId);
 
         setPendingIds((previous) => {
@@ -333,7 +468,7 @@ export default function App() {
         });
       }
     },
-    [crates]
+    [crates, conflictIds]
   );
 
   return (
@@ -422,10 +557,16 @@ export default function App() {
               key={crate.id}
               crate={crate}
               isPending={pendingIds.has(crate.id)}
-              feedback={feedbackById[crate.id] ?? ""}
+              simulateConflict={
+                conflictIds.has(crate.id)
+              }
+              feedback={feedbackById[crate.id]}
               onClaim={(id) => {
                 void handleClaim(id);
               }}
+              onToggleConflict={
+                handleToggleConflict
+              }
             />
           ))}
         </div>

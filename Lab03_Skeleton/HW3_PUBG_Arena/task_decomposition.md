@@ -14,7 +14,7 @@ optimistic claim handling, leaderboard and AI Failure Audit.
 - [x] HW3-05: Handle visibilitychange and timer synchronization.
 - [x] HW3-06: Implement optimistic crate/ticket claiming.
 - [x] HW3-07: Add duplicate-request prevention using claimId lock.
-- [ ] HW3-08: Implement rollback when the server returns HTTP 409.
+- [x] HW3-08: Implement rollback when the server returns HTTP 409.
 - [ ] HW3-09: Build PUBG Vietnam leaderboard.
 - [ ] HW3-10: Implement leaderboard sorting, filtering and kill feed.
 - [ ] HW3-11: Test concurrency, countdown and inventory consistency.
@@ -163,3 +163,34 @@ HW3-07 — Optimistic Claim & Inventory Update.
 
 ### Next Task
 HW3-08 — HTTP 409 Conflict & Optimistic Rollback.
+
+
+## HW3-08 — HTTP 409 Conflict & Optimistic Rollback
+
+### Implementation
+- Created an in-memory Mock Claim API.
+- Simulated 800ms network latency.
+- Implemented MockHttpError with status 409.
+- Added a checkbox to force conflict responses.
+- Preserved immediate optimistic stock updates.
+- Restored stock after simulated conflict.
+- Synchronized stock with mock server responses.
+- Preserved per-crate in-flight request locking.
+- Displayed success and error feedback.
+
+### Verification
+- Successful claim: PASS
+- Forced 409 response: PASS
+- Optimistic rollback: PASS
+- Duplicate pending request blocked: PASS
+- Retry after conflict: PASS
+- Production build: PASS
+
+### Limitations
+- No real HTTP backend.
+- Mock inventory exists only within one browser tab.
+- No cross-tab or cross-user atomic transactions.
+- Refreshing the page resets demo inventory.
+
+### Next Task
+HW3-09 — Concurrency & Oversell Prevention Tests.
